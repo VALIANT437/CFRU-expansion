@@ -15,18 +15,22 @@ tables to edit:
 	gSpriteTemplateTable_TrainerBackSprites
 */
 
-#define gTrainerBackPic_RedPal (const u8*) 0x8E76EBC
-#define gTrainerBackPic_LeafPal (const u8*) 0x8E76EE4
+//#define gTrainerBackPic_RedPal (const u8*) 0x8E76EBC
+//#define gTrainerBackPic_LeafPal (const u8*) 0x8E76EE4
 //#define gTrainerBackPic_BrendanPal (const u8*) 0x8E550A4
 //#define gTrainerBackPic_MayPal (const u8*) 0x8E553CC
-#define gTrainerBackPic_PokeDudePal (const u8*) 0x8E76F0C
-#define gTrainerBackPic_OldManPal (const u8*) 0x8E76F34
+//#define gTrainerBackPic_PokeDudePal (const u8*) 0x8E76F0C
+//#define gTrainerBackPic_OldManPal (const u8*) 0x8E76F34
 
 #define PAL_DEFINE(name) extern const u8 gTrainerBackPic_##name##Pal[];
 #define PAL_ENTRY(NAME, name) [TRAINER_BACK_PIC_##NAME] = {gTrainerBackPic_##name##Pal, TRAINER_BACK_PIC_##NAME},
 
 PAL_DEFINE(PlayerMale)
 PAL_DEFINE(PlayerFemale)
+PAL_DEFINE(Red)
+PAL_DEFINE(Leaf)
+PAL_DEFINE(PokeDude)
+PAL_DEFINE(OldMan)
 PAL_DEFINE(Brendan)
 PAL_DEFINE(May)
 PAL_DEFINE(Marlon)
@@ -224,12 +228,12 @@ const struct MonCoords gTrainerBackPicCoords[] =
 #define gAffineAnims_TrainerBacksprite (void*) 0x82348C8
 #define gSpriteCB_TrainerBacksprite (void*) (0x80120C4 | 1)
 
-#define sTrainerBackPicTable_Red (void*) 0x8234718
-#define sTrainerBackPicTable_Leaf (void*) 0x8234740
+//#define sTrainerBackPicTable_Red (void*) 0x8234718
+//#define sTrainerBackPicTable_Leaf (void*) 0x8234740
 //#define sTrainerBackPicTable_Brendan (void*) 0x82347A8
 //#define sTrainerBackPicTable_May (void*) 0x82347C8
-#define sTrainerBackPicTable_PokeDude (void*) 0x8234768
-#define sTrainerBackPicTable_OldMan (void*) 0x8234788
+//#define sTrainerBackPicTable_PokeDude (void*) 0x8234768
+//#define sTrainerBackPicTable_OldMan (void*) 0x8234788
 
 #define FOUR_FRAME_TABLE(name)                                           \
 	extern const u8 gTrainerBackPic_##name##Tiles[];                     \
@@ -252,8 +256,12 @@ const struct MonCoords gTrainerBackPicCoords[] =
 		{gTrainerBackPic_##name##Tiles + 0x2000, 0x800, 0},              \
 	};
 
+FIVE_FRAME_TABLE(Red)
+FIVE_FRAME_TABLE(Leaf)
 FOUR_FRAME_TABLE(Brendan)
 FOUR_FRAME_TABLE(May)
+FOUR_FRAME_TABLE(PokeDude)
+FOUR_FRAME_TABLE(OldMan)
 
 #ifdef UNBOUND
 
