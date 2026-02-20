@@ -336,3 +336,112 @@ Item_StoragePal 0810d7fc
 ##Replace new egg hatch animation
 egg_hatchingTiles 0826011C
 egg_hatchingPal 0826012C
+
+##Trainer Sprites
+KazTiles 82399B4
+KazPal 8239E54
+
+AizenTiles 823995C
+AizenPal 8239DFC
+
+EllieTiles 823991C
+ElliePal 8239DBC
+
+VincentTiles 8239924
+VincentPal 8239DC4
+
+RangerFTiles 82399F4
+RangerFPal 8239E94
+
+RangerMTiles 82399EC
+RangerMPal 8239E8C
+
+JoelTiles 82399AC
+JoelPal 8239E4C
+
+SludgeTiles 823994C
+SludgePal 8239DEC
+
+PiedPiperTiles 8239944
+PiedPiperPal 8239DE4
+
+KatherineTiles 823993C
+KatherinePal 8239DDC
+
+ZinniaTiles 8239934
+ZinniaPal 8239DD4
+
+ShadowTiles 823992C
+ShadowPal 8239DCC
+
+RGruntMTiles 82398DC
+RGruntMPal 8239D7C
+
+RGruntFTiles 8239914
+RGruntFPal 8239DB4
+
+OfficerTiles 82397E4
+OfficerPal 8239C84
+
+FlareFTiles 82397EC
+FlareFPal 8239C8C
+
+FlareMTiles 823984C
+FlareMPal 8239CEC
+
+PlasmaMTiles 8239874
+PlasmaMPal 8239D14
+
+PlasmaFTiles 82398E4
+PlasmaFPal 8239D84
+
+AquaMTiles 823999C
+AquaMPal 8239E3C
+
+AquaFTiles 82399C4
+AquaFPal 8239E64
+
+ShadowTriadTiles 823985C
+ShadowTriadPal 8239CFC
+
+MagmaMTiles 82397D4
+MagmaMPal 8239C74
+
+MagmaFTiles 82397DC
+MagmaFPal 8239C7C
+
+AetherFTiles 823998C
+AetherFPal 8239E2C
+
+AetherMTiles 823997C
+AetherMPal 8239E1C
+
+GrannyTiles 8239834
+GrannyPal 8239CD4
+
+DemonTiles 82398AC
+DemonPal 8239D4C
+
+WorshipperTiles 82399DC
+WorshipperPal 8239E7C
+
+CynthiaTiles 82399FC
+CynthiaPal 8239E9C
+
+AgathaTiles 82397B4
+AgathaPal 8239C54
+
+SidneyTiles 82397AC
+SidneyPal 8239C4C
+
+GalacticFTiles 82397A4
+GalacticFPal 8239C44
+
+GalacticMTiles 823979C
+GalacticMPal 8239C3C
+
+AdminFTiles 8239794
+AdminFPal 8239C34
+
+AdminMTiles 823978C
+AdminMPal 8239C2C
