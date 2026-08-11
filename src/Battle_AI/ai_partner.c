@@ -49,8 +49,8 @@ u8 AIScript_Partner(const u8 bankAtk, const u8 bankAtkPartner, const u16 origina
 	u16 partnerMove = data->partnerMove;
 
 	u8 atkPartnerItemEffect = ITEM_EFFECT(bankAtkPartner);
-	u8 atkAbility = GetAIAbility(bankAtk, data->foe1, move);
-	u8 atkPartnerAbility = data->atkPartnerAbility;
+	ability_t atkAbility = GetAIAbility(bankAtk, data->foe1, move);
+	ability_t atkPartnerAbility = data->atkPartnerAbility;
 
 	if (IsTargetAbilityIgnored(atkPartnerAbility, atkAbility, move))
 		atkPartnerAbility = ABILITY_NONE;
@@ -65,8 +65,9 @@ u8 AIScript_Partner(const u8 bankAtk, const u8 bankAtkPartner, const u16 origina
 		{
 			//Electric
 			case ABILITY_VOLTABSORB:
-				if ((moveType == TYPE_ELECTRIC && !SpeciesHasEarthEater(SPECIES(gBankTarget)))
-				|| (moveType == TYPE_GROUND && SpeciesHasEarthEater(SPECIES(gBankTarget))))
+			case ABILITY_EARTHEATER:
+				if ((moveType == TYPE_ELECTRIC && !(ABILITY(gBankTarget) == ABILITY_EARTHEATER))
+				|| (moveType == TYPE_GROUND && (ABILITY(gBankTarget) == ABILITY_EARTHEATER)))
 					IncreaseHealPartnerViability(&viability, class, bankAtkPartner);
 				break;
 			case ABILITY_MOTORDRIVE:
@@ -118,10 +119,27 @@ u8 AIScript_Partner(const u8 bankAtk, const u8 bankAtkPartner, const u16 origina
 					IncreaseHelpingHandViability(&viability, class);
 				}
 				break;
+			case ABILITY_WELLBAKEDBODY:
+				if (moveType == TYPE_FIRE
+				&&  !IsClassDoublesTotalTeamSupport(partnerClass)
+				&&  AI_STAT_CAN_RISE(bankAtkPartner, STAT_STAGE_DEF))
+				{
+					IncreaseHelpingHandViability(&viability, class);
+				}
+				break;
 
 			// Grass
 			case ABILITY_SAPSIPPER:
 				if (moveType == TYPE_GRASS
+				&&  !IsClassDoublesTotalTeamSupport(partnerClass)
+				&&  RealPhysicalMoveInMoveset(bankAtkPartner)
+				&&  AI_STAT_CAN_RISE(bankAtkPartner, STAT_STAGE_ATK))
+				{
+					IncreaseHelpingHandViability(&viability, class);
+				}
+				break;
+			case ABILITY_WINDRIDER:
+				if (gSpecialMoveFlags[move].gWindMoves
 				&&  !IsClassDoublesTotalTeamSupport(partnerClass)
 				&&  RealPhysicalMoveInMoveset(bankAtkPartner)
 				&&  AI_STAT_CAN_RISE(bankAtkPartner, STAT_STAGE_ATK))
@@ -158,6 +176,17 @@ u8 AIScript_Partner(const u8 bankAtk, const u8 bankAtkPartner, const u16 origina
 					IncreaseHelpingHandViability(&viability, class);
 				}
 				break;
+			case ABILITY_THERMALEXCHANGE:
+				if (moveSplit != SPLIT_STATUS
+				&&  !IsClassDoublesTotalTeamSupport(partnerClass)
+				&&  moveType == TYPE_FIRE
+				&&  AI_STAT_CAN_RISE(bankAtkPartner, STAT_STAGE_ATK)
+				&& !MoveKnocksOutXHits(move, bankAtk, bankAtkPartner, 1))
+				{
+					IncreaseHelpingHandViability(&viability, class);
+				}
+				break;
+
 			case ABILITY_STEAMENGINE:
 				if (moveSplit != SPLIT_STATUS
 				&&  !IsClassDoublesTotalTeamSupport(partnerClass)
@@ -470,8 +499,8 @@ u8 AIScript_Partner(const u8 bankAtk, const u8 bankAtkPartner, const u16 origina
 					{
 						u8 foe1 = FOE(bankAtk);
 						u8 foe2 = PARTNER(foe1);
-						u8 foe1Ability = ABILITY(foe1);
-						u8 foe2Ability = ABILITY(foe2);
+						ability_t foe1Ability = ABILITY(foe1);
+						ability_t foe2Ability = ABILITY(foe2);
 
 						if (BATTLER_ALIVE(foe1)
 						&& (foe1Ability == ABILITY_CONTRARY || foe1Ability == ABILITY_MIRRORARMOR))

@@ -269,6 +269,17 @@ void SetMoveEffect(bool8 primary, u8 certain)
 		{
 			BattleScriptPush(gBattlescriptCurrInstr + 1);
 
+			if ((gBattleCommunication[MOVE_EFFECT_BYTE] == MOVE_EFFECT_POISON
+			  || gBattleCommunication[MOVE_EFFECT_BYTE] == MOVE_EFFECT_TOXIC)
+			 && ABILITY(gBankAttacker) == ABILITY_POISONPUPPETEER
+			 && SIDE(gEffectBank) != SIDE(gBankAttacker)
+			 && CanBeConfused(gEffectBank, gBankAttacker, TRUE))
+			{
+				gBattleMons[gEffectBank].status2 |= (Random() % 4) + 2;
+				gBattleScripting.bank = gBankAttacker;
+				BattleScriptPush(BattleScript_SetPuppetConfusion);
+			}
+
 			if (gBattleCommunication[MOVE_EFFECT_BYTE] == MOVE_EFFECT_TOXIC && IsDynamaxed(gEffectBank))
 				gBattleCommunication[MOVE_EFFECT_BYTE] = MOVE_EFFECT_POISON; //Toxic becomes regular poison on a Dynamaxed opponent
 
@@ -794,7 +805,7 @@ void SetMoveEffect(bool8 primary, u8 certain)
 				&&  GetBattlerTurnOrderNum(gEffectBank) < gCurrentTurnActionNumber) //Target moved before attacker
 				{
 					gNewBS->secondaryEffectApplied = TRUE;
-					u8* defAbilityLoc;
+				ability_t* defAbilityLoc;
 					defAbilityLoc = GetAbilityLocation(gBankTarget);
 
 					gStatuses3[gEffectBank] |= STATUS3_ABILITY_SUPPRESS;

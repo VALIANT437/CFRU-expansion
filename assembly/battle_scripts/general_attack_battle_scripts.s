@@ -42,6 +42,11 @@ BS_StatusMoveFail:
 	pause DELAY_HALFSECOND
 	printstring 0x184
 	waitmessage DELAY_1SECOND
+	jumpifmove MOVE_TAILWIND TailwindActivateWindRider
+	goto BS_MOVE_END
+
+TailwindActivateWindRider:
+	callasm TryActivateWindRiderFromTailwind
 	goto BS_MOVE_END
 	
 ProtectedByTerrainBS:
@@ -112,7 +117,6 @@ BattleScript_PauseResultMessage:
 .global BS_002_SetPoisonChance
 BS_002_SetPoisonChance:
 	setmoveeffect MOVE_EFFECT_POISON
-	callasm TrySetPoisonPuppeterEffect
 	goto BS_STANDARD_HIT
 
 @;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -617,6 +621,8 @@ RoarBS:
 	attackstring @;Still activates Protean even if move fails
 	ppreduce
 	jumpifability BANK_TARGET ABILITY_SUCTIONCUPS BattleScript_AbilityPreventsPhasingOut
+	callasm CheckTargetGuardDog
+	jumpifbyte EQUALS MULTISTRING_CHOOSER 0x1 BattleScript_AbilityPreventsPhasingOut
 	jumpifspecialstatusflag BANK_TARGET STATUS3_ROOTED 0x0 0x81D8F27 @;BattleScript_PrintMonIsRooted
 	accuracycheck FAILED 0x0
 	forcerandomswitch BANK_TARGET BANK_ATTACKER FAILED
@@ -631,6 +637,8 @@ DragonTailBS:
 	jumpifdynamaxed BANK_TARGET BattleScript_DragonTailBlockedByDynamax
 	jumpifspecialstatusflag BANK_TARGET STATUS3_ROOTED 0x0 0x81D8F27 @;BattleScript_PrintMonIsRooted
 	jumpifability BANK_TARGET ABILITY_SUCTIONCUPS BattleScript_AbilityPreventsPhasingOutSkipFail
+	callasm CheckTargetGuardDog
+	jumpifbyte EQUALS MULTISTRING_CHOOSER 0x1 BattleScript_AbilityPreventsPhasingOutSkipFail
 	setbyte CMD49_STATE 0x0
 	cmd49 0x6 0x0
 	setbyte FORCE_SWITCH_HELPER 0x1
@@ -956,7 +964,6 @@ BS_033_SetBadPoison:
 	waitanimation
 	setmoveeffect MOVE_EFFECT_TOXIC
 	seteffectprimary
-	callasm TrySetPoisonPuppeterEffect
 	goto BS_MOVE_END
 
 @;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1073,9 +1080,10 @@ BS_042_TrapAndDamage:
 	goto BS_STANDARD_HIT
 
 SaltCureBS:
-    call STANDARD_DAMAGE
+	call STANDARD_DAMAGE
 	faintpokemon BANK_TARGET FALSE NULL
 	jumpiffaintedmon BANK_TARGET, TRUE, BS_EffectSaltCure_End
+	jumpifbehindsubstitute BANK_TARGET BS_EffectSaltCure_End
 	applysaltcure BANK_TARGET
 	setword BATTLE_STRING_LOADER sText_TargetIsBeingSaltCured
 	printstring 0x184
@@ -1475,7 +1483,6 @@ PoisonChecks:
 	waitanimation
 	setmoveeffect MOVE_EFFECT_POISON
 	seteffectprimary
-	callasm TrySetPoisonPuppeterEffect
 	goto BS_MOVE_END
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -4035,28 +4042,10 @@ BS_DragonCheer:
 	jumpifprotectedbycraftyshield BANK_TARGET FAILED
 	attackstring
 	ppreduce
-	jumpifstat BANK_TARGET LESSTHAN STAT_ATK STAT_MAX DragonCheer_ACC
-	jumpifstat BANK_TARGET EQUALS STAT_SPATK STAT_MAX BattleScript_CantRaiseMultipleTargetStats
-
-DragonCheer_ACC:
+	callasm TrySetDragonCheer
 	attackanimation
 	waitanimation
-	setbyte STAT_ANIM_PLAYED 0x0
-	jumpiftype BANK_TARGET TYPE_DRAGON DragonCheer_ACC2
-	playstatchangeanimation BANK_TARGET, STAT_ANIM_ACC, STAT_ANIM_UP | STAT_ANIM_IGNORE_ABILITIES
-	setstatchanger STAT_ACC | INCREASE_1
-	statbuffchange STAT_TARGET | STAT_BS_PTR | STAT_CERTAIN BS_MOVE_END
-	jumpifbyte EQUALS MULTISTRING_CHOOSER 0x2 BS_MOVE_END
-	printfromtable gStatUpStringIds
-	waitmessage DELAY_1SECOND
-	goto BS_MOVE_END
-
-DragonCheer_ACC2:
-	playstatchangeanimation BANK_TARGET, STAT_ANIM_ACC, STAT_ANIM_UP | STAT_ANIM_IGNORE_ABILITIES
-	setstatchanger STAT_ACC | INCREASE_2
-	statbuffchange STAT_TARGET | STAT_BS_PTR | STAT_CERTAIN BS_MOVE_END
-	jumpifbyte EQUALS MULTISTRING_CHOOSER 0x2 BS_MOVE_END
-	printfromtable gStatUpStringIds
+	printfromtable 0x83FE5B0
 	waitmessage DELAY_1SECOND
 	goto BS_MOVE_END
 
@@ -4445,7 +4434,7 @@ BS_191_SkillSwap:
 	jumpifmove MOVE_ENTRAINMENT EntrainmentBS
 	jumpifmove MOVE_COREENFORCER CoreEnforcerBS
 	jumpifmove MOVE_SIMPLEBEAM SimpleBeamBS
-	jumpifmove MOVE_DOODLE EntrainmentBS
+	jumpifmove MOVE_DOODLE DoodleBS
 	
 SkillSwapBS:
 	attackcanceler
@@ -4501,6 +4490,36 @@ EntrainmentBS:
 	ppreduce
 	callasm FailMoveIfAura
 	goto WorrySeedBS_ChangeAbility
+
+DoodleBS:
+	attackcanceler
+	jumpifbehindsubstitute BANK_TARGET FAILED_PRE
+	accuracycheck BS_MOVE_MISSED 0x0
+	attackstringnoprotean
+	ppreduce
+	callasm FailMoveIfAura
+	callasm AbilityChangeBSFunc
+	tryactivateprotean
+	attackanimation
+	waitanimation
+
+	copyarray BATTLE_SCRIPTING_BANK USER_BANK 0x1
+	playanimation BANK_ATTACKER ANIM_LOAD_ABILITY_POP_UP 0x0
+	call BattleScript_AbilityPopUpRevert
+	call BattleScript_AbilityPopUp
+	pause DELAY_HALFSECOND
+	call BattleScript_AbilityPopUpRevert
+
+	printstring 0x184
+	waitmessage DELAY_1SECOND
+	copyarray BATTLE_SCRIPTING_BANK USER_BANK 0x1
+	call BattleScript_TryRemoveIllusion
+	callasm TryRemovePrimalWeatherAfterAbilityChange
+	call 0x81D92DC @;Try to revert Cherrim and Castform
+	callasm RestoreOriginalAttackerAndTarget
+	tryactivateswitchinability BANK_ATTACKER
+	callasm RestoreOriginalAttackerAndTarget
+	goto BS_MOVE_END
 
 WorrySeedBS:
 SimpleBeamBS:
@@ -5268,7 +5287,6 @@ VictoryDance_Speed:
 .global BS_209_BadPoisonChance
 BS_209_BadPoisonChance:
 	setmoveeffect MOVE_EFFECT_TOXIC
-	callasm TrySetPoisonPuppeterEffect
 	goto BS_STANDARD_HIT
 	
 @;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -6329,9 +6347,15 @@ BS_247_Glaive_Rush:
 
 @;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-.global BS_248_Blank
-BS_248_Blank:
-	goto BS_STANDARD_HIT
+.global BS_248_RevivalBlessing
+BS_248_RevivalBlessing:
+	attackcanceler
+	attackstring
+	callasm TryRevivalBlessing
+	ppreduce
+	attackanimation
+	waitanimation
+	goto BS_MOVE_END
 	
 @;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 

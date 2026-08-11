@@ -5,54 +5,6 @@
 .include "../xse_defines.s"
 .include "../asm_defines.s"
 
-.global EventScript_Pallet_FatGuy
-
-EventScript_Pallet_FatGuy:
-    faceplayer
-    lock
-    setflag 0x926
-    setflag 0x828
-    setflag 0x4BD
-    givepokemon 0x11A 0x5 0x0 0x0 0x0 0x0
-    givepokemon 0x510 0x5 0x0 0x0 0x0 0x0
-    givepokemon 0x456 0x5 0x0 0x0 0x0 0x0
-    givepokemon 0x22C 0x5 0x0 0x0 0x0 0x0
-    givepokemon 0x99 0x5 0x0 0x0 0x0 0x0
-    giveegg 0x1
-    setvar 0x8001 0x1e
-    special 0xD1
-    msgbox gText_TestScript MSG_NORMAL
-    release
-    end
-
-.align 2
-.global EventScript_Pallet_Girl
-
-EventScript_Pallet_Girl:
-    faceplayer
-    lock
-    msgbox gText_PalletGirl_Text1 MSG_YESNO
-    compare LASTRESULT 0x1
-    if YES _goto PalletGirl_ShowFollowerMon
-    setflag 0xa02
-    setflag 0xa03
-    hidefollowermon
-    setflag 0xA0B
-    clearflag 0x4BD
-    special 0xD2
-    release
-    end
-
-PalletGirl_ShowFollowerMon:
-    callasm ChangeFollowerPalette
-    showfollowermon
-    special 0xD1
-    setflag 0x4BD
-    release
-    end
-
-.align 2
-
 .global EventScript_ChangeTeraTypeNPC
 .global EventScript_Pallet_AideGuy
 
@@ -84,6 +36,9 @@ EventScript_ChangeTeraTypeNPCNo:
 EventScript_ChangeTeraTypeNPCSelected:
     special2 0x8003 0x147
     bufferpokemon 0x0 0x8003
+    callasm CanChangeTeraTypeInOW
+    compare 0x4001 FALSE
+    if TRUE _goto EventScript_ChangeTeraTypeNPCLocked
     msgbox gText_ChangeTeraTypeNPCSelected MSG_NORMAL
 
     @ Reset 0x8004 and 0x800D (Required for Scrolling Multichoice)
@@ -118,6 +73,11 @@ EventScript_ChangeTeraTypeNPCSelected:
         case 17, EventScript_ChangeTeraTypeNPC_SetFairy
         case 18, EventScript_ChangeTeraTypeNPC_SetStellar
         case 0x7F, EventScript_ChangeTeraTypeNPCNo
+
+EventScript_ChangeTeraTypeNPCLocked:
+    msgbox gText_ChangeTeraTypeNPCLocked MSG_NORMAL
+    release
+    end
 
 
 EventScript_ChangeTeraTypeNPC_SetNormal:
@@ -310,3 +270,11 @@ EventScript_Pallet_AideGuy:
         end
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+.global EventScript_GiveMons_Special
+EventScript_GiveMons_Special:
+    lock
+    faceplayer
+    setflag 0x92B
+    release
+    end

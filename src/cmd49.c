@@ -79,6 +79,7 @@ enum
 	ATK49_ITEM_EFFECTS_END_TURN_ATTACKER_3,
 	ATK49_EJECT_BUTTON,
 	ATK49_RED_CARD,
+	ATK49_MIRROR_HERB,
 	ATK49_EJECT_PACK,
 	ATK49_SHELL_BELL_LIFE_ORB_RECOIL,
 	ATK49_SWITCH_OUT_ABILITIES,
@@ -185,22 +186,11 @@ void atk49_moveend(void) //All the effects that happen after a move is used
 						}
 						break;
 
-					case ABILITY_POISONTOUCH: ;
-						u8 chance = 30;
-						if (BankHasRainbow(gBankAttacker))
-							chance *= 2;
+					case ABILITY_POISONTOUCH:
+					{
+						u8 chance = BankHasRainbow(gBankAttacker) ? 60 : 30;
 
-						if (ABILITY(gBankTarget) != ABILITY_SHIELDDUST
-						&& ITEM_EFFECT(gBankTarget) != ITEM_EFFECT_COVERT_CLOAK
-						&& CanBePoisoned(gBankTarget, gBankAttacker, TRUE)
-						&& umodsi(Random(), 100) < chance
-						&& SpeciesHasToxicChain(SPECIES(gBankAttacker)))
-						{
-							BattleScriptPushCursor();
-							gBattlescriptCurrInstr = BattleScript_ToxicChain;
-							effect = TRUE;
-						}
-						else if (CheckContact(gCurrentMove, gBankAttacker, gBankTarget)
+						if (CheckContact(gCurrentMove, gBankAttacker, gBankTarget)
 						&& ABILITY(gBankTarget) != ABILITY_SHIELDDUST
 						&& ITEM_EFFECT(gBankTarget) != ITEM_EFFECT_COVERT_CLOAK
 						&& CanBePoisoned(gBankTarget, gBankAttacker, TRUE)
@@ -210,6 +200,18 @@ void atk49_moveend(void) //All the effects that happen after a move is used
 							gBattlescriptCurrInstr = BattleScript_PoisonTouch;
 							effect = TRUE;
 						}
+						break;
+					}
+
+					case ABILITY_TOXICCHAIN:
+						if (CanBePoisoned(gBankTarget, gBankAttacker, TRUE)
+						&& umodsi(Random(), 100) < 30)
+						{
+							BattleScriptPushCursor();
+							gBattlescriptCurrInstr = BattleScript_ToxicChain;
+							effect = TRUE;
+						}
+						break;
 				}
 			}
 			gBattleScripting.atk49_state++;
@@ -873,11 +875,9 @@ void atk49_moveend(void) //All the effects that happen after a move is used
 					break;
 
 				case ABILITY_MOXIE:
-				#ifdef ABILITY_CHILLINGNEIGH
 				case ABILITY_CHILLINGNEIGH:
-				#endif
-				#ifdef ABILITY_ASONE_CHILLING
-				case ABILITY_ASONE_CHILLING:
+				#ifdef ABILITY_ASONEICERIDER
+				case ABILITY_ASONEICERIDER:
 				#endif
 					if ((arg1 != ARG_IN_FUTURE_ATTACK || gWishFutureKnock.futureSightPartyIndex[bankDef] == gBattlerPartyIndexes[gBankAttacker])
 					&& gBattleMons[bankDef].hp == 0
@@ -901,12 +901,12 @@ void atk49_moveend(void) //All the effects that happen after a move is used
 					}
 					break;
 
-				#if (defined ABILITY_GRIMNEIGH || defined ABILITY_ASONE_GRIM)
+				#if (defined ABILITY_GRIMNEIGH || defined ABILITY_ASONESHADOWRIDER)
 				#ifdef ABILITY_GRIMNEIGH
 				case ABILITY_GRIMNEIGH:
 				#endif
-				#ifdef ABILITY_ASONE_GRIM
-				case ABILITY_ASONE_GRIM:
+				#ifdef ABILITY_ASONESHADOWRIDER
+				case ABILITY_ASONESHADOWRIDER:
 				#endif
 					if ((arg1 != ARG_IN_FUTURE_ATTACK || gWishFutureKnock.futureSightPartyIndex[bankDef] == gBattlerPartyIndexes[gBankAttacker])
 					&& gBattleMons[bankDef].hp == 0
@@ -931,7 +931,8 @@ void atk49_moveend(void) //All the effects that happen after a move is used
 					break;
 				#endif
 
-				case ABILITY_BEASTBOOST: ;
+				case ABILITY_BEASTBOOST:
+				case ABILITY_EELEVATE: ;
 					if ((arg1 != ARG_IN_FUTURE_ATTACK || gWishFutureKnock.futureSightPartyIndex[bankDef] == gBattlerPartyIndexes[gBankAttacker])
 					&& gBattleMons[bankDef].hp == 0
 					&& BATTLER_ALIVE(gBankAttacker)
@@ -1220,8 +1221,7 @@ void atk49_moveend(void) //All the effects that happen after a move is used
 					&&  gNewBS->turnDamageTaken[banks[i]] != 0
 					&&  !MoveBlockedBySubstitute(gCurrentMove, gBankAttacker, banks[i])
 					&&  ((gBattleTypeFlags & BATTLE_TYPE_TRAINER) || SIDE(i) == B_SIDE_PLAYER) //Wild's can't activate
-					&&  HasMonToSwitchTo(banks[i])
-					&&	!(SpeciesHasGuardDog(SPECIES(banks[i])) && ABILITY(banks[i]) == ABILITY_GUARDDOG))
+					&&  HasMonToSwitchTo(banks[i]))
 					{
 						if (gBattleMoves[gCurrentMove].effect == EFFECT_BATON_PASS)
 							gBattlescriptCurrInstr = BattleScript_Atk49; //Cancel switchout for U-Turn & Volt Switch
@@ -1257,8 +1257,7 @@ void atk49_moveend(void) //All the effects that happen after a move is used
 					&&  !(gNewBS->ResultFlags[banks[i]] & MOVE_RESULT_NO_EFFECT)
 					&&  gNewBS->turnDamageTaken[banks[i]] != 0
 					&&  !MoveBlockedBySubstitute(gCurrentMove, gBankAttacker, banks[i])
-					&&  ((gBattleTypeFlags & BATTLE_TYPE_TRAINER) || IsRaidBattle() || SIDE(banks[i]) == B_SIDE_PLAYER)
-					&&	!(SpeciesHasGuardDog(SPECIES(banks[i])) && ABILITY(banks[i]) == ABILITY_GUARDDOG)) //Normal wild attackers can't activate
+					&&  ((gBattleTypeFlags & BATTLE_TYPE_TRAINER) || IsRaidBattle() || SIDE(banks[i]) == B_SIDE_PLAYER))
 					{
 						gNewBS->NoSymbiosisByte = TRUE;
 						gForceSwitchHelper = Force_Switch_Red_Card;
@@ -1270,6 +1269,20 @@ void atk49_moveend(void) //All the effects that happen after a move is used
 						effect = 1;
 						break; //Only the fastest Red Card activates so end loop
 					}
+				}
+			}
+			gBattleScripting.atk49_state++;
+			break;
+
+		case ATK49_MIRROR_HERB:
+			for (i = 0; i < gBattlersCount; ++i)
+			{
+				if (BATTLER_ALIVE(i)
+				&& ITEM_EFFECT(i) == ITEM_EFFECT_MIRROR_HERB
+				&& ItemBattleEffects(ItemEffects_SwitchIn, i, TRUE, FALSE))
+				{
+					effect = 1;
+					return;
 				}
 			}
 			gBattleScripting.atk49_state++;
@@ -1376,7 +1389,7 @@ void atk49_moveend(void) //All the effects that happen after a move is used
 			{
 				if (gNewBS->DisabledMoldBreakerAbilities[i])
 				{
-					gBattleMons[i].ability = gNewBS->DisabledMoldBreakerAbilities[i];
+					ABILITY(i) = gNewBS->DisabledMoldBreakerAbilities[i];
 					gNewBS->DisabledMoldBreakerAbilities[i] = 0;
 				}
 			}
@@ -1539,11 +1552,11 @@ void atk49_moveend(void) //All the effects that happen after a move is used
 
 			if (!gNewBS->DancerInProgress
 			&& arg1 != ARG_IN_PURSUIT
-			&& ABILITY_ON_FIELD(ABILITY_DANCER)
+			&& ABILITY_ON_FIELD(ABILITY_OPPORTUNIST)
 			&& gNewBS->attackAnimationPlayed
 			&& !gNewBS->moveWasBouncedThisTurn
 			&& gSpecialMoveFlags[gCurrentMove].gBuffMoves
-			&& SpeciesHasOportunist(SPECIES(bank)))
+			&& ABILITY(bank) == ABILITY_OPPORTUNIST)
 			{
 				gNewBS->DancerInProgress = TRUE;
 				gNewBS->CurrentTurnAttacker = gBankAttacker;
@@ -1562,7 +1575,7 @@ void atk49_moveend(void) //All the effects that happen after a move is used
 			&& gNewBS->attackAnimationPlayed
 			&& !gNewBS->moveWasBouncedThisTurn
 			&& gSpecialMoveFlags[gCurrentMove].gDanceMoves
-			&& !SpeciesHasOportunist(SPECIES(bank)))
+			&& ABILITY(bank) == ABILITY_DANCER)
 			{
 				gNewBS->DancerInProgress = TRUE;
 				gNewBS->CurrentTurnAttacker = gBankAttacker;

@@ -185,9 +185,6 @@ u8 TurnBasedEffects(u16 move, u8 bank, struct Pokemon* monAtk)
 					if(gNewBS->StompingTantrumTimers[i])
 						--gNewBS->StompingTantrumTimers[i];
 
-					if(gNewBS->GlaiveRushTimers[i])
-						--gNewBS->GlaiveRushTimers[i];
-
 					if (gNewBS->StakeoutCounters[i])
 						--gNewBS->StakeoutCounters[i];
 
@@ -394,7 +391,6 @@ u8 TurnBasedEffects(u16 move, u8 bank, struct Pokemon* monAtk)
 						case ABILITY_DRYSKIN:
 						case ABILITY_ICEBODY:
 						case ABILITY_SOLARPOWER:
-						case ABILITY_EVAPORATE:
 							if (AbilityBattleEffects(ABILITYEFFECT_ENDTURN, gActiveBattler, 0, 0, 0))
 								effect++;
 							break;
@@ -569,6 +565,7 @@ u8 TurnBasedEffects(u16 move, u8 bank, struct Pokemon* monAtk)
 								case ABILITY_HYDRATION:
 								case ABILITY_HEALER:
 								case ABILITY_EMERGENCYEXIT:
+								case ABILITY_WIMPOUT:
 									if (AbilityBattleEffects(ABILITYEFFECT_ENDTURN, gActiveBattler, 0, 0, 0))
 										effect++;
 							}
@@ -665,6 +662,7 @@ u8 TurnBasedEffects(u16 move, u8 bank, struct Pokemon* monAtk)
 				{
 					switch(ABILITY(gActiveBattler)) {
 						case ABILITY_EMERGENCYEXIT:
+						case ABILITY_WIMPOUT:
 							if (AbilityBattleEffects(ABILITYEFFECT_ENDTURN, gActiveBattler, 0, 0, 0))
 								effect++;
 					}
@@ -1492,6 +1490,7 @@ u8 TurnBasedEffects(u16 move, u8 bank, struct Pokemon* monAtk)
 						{
 							switch(ABILITY(gActiveBattler)) {
 								case ABILITY_HARVEST:
+								case ABILITY_CUDCHEW:
 								case ABILITY_PICKUP:
 								case ABILITY_BALLFETCH:
 									if (AbilityBattleEffects(ABILITYEFFECT_ENDTURN, gActiveBattler, 0, 0, 0))
@@ -1516,7 +1515,7 @@ u8 TurnBasedEffects(u16 move, u8 bank, struct Pokemon* monAtk)
 					struct Pokemon* mon = GetBankPartyData(gActiveBattler);
 					u16 species = GetMonData(mon, MON_DATA_SPECIES, NULL);
 					u16 newSpecies = SPECIES_NONE;
-					u8 ability = ABILITY(gActiveBattler);
+					ability_t ability = ABILITY(gActiveBattler);
 					bool8 changedForm = FALSE;
 					bool8 reloadType = FALSE;
 					bool8 reloadStats = FALSE;
@@ -1694,7 +1693,7 @@ u8 TurnBasedEffects(u16 move, u8 bank, struct Pokemon* monAtk)
 
 			case ET_Reactivate_Overworld_Weather:
 				gBattleStruct->turnEffectsBank = gBattlersCount;
-				if (gBattleWeather == 0 && AbilityBattleEffects(ABILITYEFFECT_ON_SWITCHIN, 0, 0, 0xFF, 0))
+				if (gBattleWeather == 0 && AbilityBattleEffects(ABILITYEFFECT_ON_SWITCHIN, 0, 0, ABILITYEFFECT_SWITCH_IN_WEATHER, 0))
 				{
 					if (RainCanBeEvaporated() && BankOnFieldHasEvaporate())
 					{
@@ -1757,7 +1756,7 @@ u8 TurnBasedEffects(u16 move, u8 bank, struct Pokemon* monAtk)
 				break;
 
 			case ET_Saltcure:
-				if (gStatuses4[gActiveBattler] & STATUS4_SALTCURE
+				if (gNewBS->statuses4[gActiveBattler] & STATUS4_SALTCURE
 				&&  BATTLER_ALIVE(gActiveBattler)
 				&&  ABILITY(gActiveBattler) != ABILITY_MAGICGUARD)
 				{
@@ -1842,7 +1841,7 @@ u32 GetLeechSeedDamage(u8 bank)
 u32 GetPoisonDamage(u8 bank, bool8 aiCalc)
 {
 	u32 damage = 0;
-	u8 ability = ABILITY(bank);
+	ability_t ability = ABILITY(bank);
 
 	if (ability != ABILITY_MAGICGUARD
 	&& ability != ABILITY_POISONHEAL)
@@ -1870,7 +1869,7 @@ u32 GetPoisonDamage(u8 bank, bool8 aiCalc)
 u32 GetBurnDamage(u8 bank)
 {
 	u32 damage = 0;
-	u8 ability = ABILITY(bank);
+	ability_t ability = ABILITY(bank);
 
 	if (gBattleMons[bank].status1 & STATUS_BURN
 	&& ability != ABILITY_MAGICGUARD)
@@ -1901,7 +1900,7 @@ u32 GetFrostbiteDamage(unusedArg u8 bank)
 	u32 damage = 0;
 
 	#ifdef FROSTBITE
-	u8 ability = ABILITY(bank);
+	ability_t ability = ABILITY(bank);
 
 	if (gBattleMons[bank].status1 & STATUS_FREEZE
 	&& ability != ABILITY_MAGICGUARD)
@@ -2006,7 +2005,7 @@ u32 GetBadThoughtsDamage(u8 bank)
 	u32 damage = 0;
 
 	u8 divisor;
-	u8 ability = ABILITY(bank);
+	ability_t ability = ABILITY(bank);
 
 	if (IsBadThoughtsBattle()
 	&& !IsOfType(bank, TYPE_DARK)
@@ -2106,7 +2105,8 @@ u32 GetSaltCureDamage(u8 bank)
 {
 	u32 damage = 0;
 
-	if (gStatuses4[bank] & STATUS4_SALTCURE
+	if (gNewBS != NULL && bank < gBattlersCount
+	&& gNewBS->statuses4[bank] & STATUS4_SALTCURE
 	&& ABILITY(bank) != ABILITY_MAGICGUARD)
 	{
 		if (IsOfType(bank, TYPE_WATER) || IsOfType(bank, TYPE_STEEL))

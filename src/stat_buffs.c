@@ -9,6 +9,7 @@
 #include "../include/new/accuracy_calc.h"
 #include "../include/new/battle_strings.h"
 #include "../include/new/battle_util.h"
+#include "../include/new/item_battle_scripts.h"
 #include "../include/new/stat_buffs.h"
 /*
 stat_buffs.c
@@ -21,7 +22,9 @@ extern u8 SeverelyString[];
 
 static bool8 IsIntimidateActive(void)
 {
-	return gNewBS->intimidateActive != 0 && !gNewBS->cottonDownActive;
+	return gNewBS->intimidateActive != 0
+		&& !gNewBS->cottonDownActive
+		&& ABILITY(gNewBS->intimidateActive - 1) == ABILITY_INTIMIDATE;
 }
 
 static bool8 IsCottonDownActive(void)
@@ -148,7 +151,7 @@ void atk48_playstatchangeanimation(void)
 
 	STAT_ANIM_DOWN:	;
 		s16 startingStatAnimId;
-		u8 ability = ABILITY(gActiveBattler);
+		ability_t ability = ABILITY(gActiveBattler);
 
 		if (flags & ATK48_STAT_BY_TWO)
 			startingStatAnimId = STAT_ANIM_MINUS2 - 1;
@@ -283,7 +286,7 @@ u8 ChangeStatBuffs(s8 statValue, u8 statId, u8 flags, const u8* BS_ptr)
 	else
 		gActiveBattler = gBankTarget;
 
-	u8 ability = ABILITY(gActiveBattler);
+	ability_t ability = ABILITY(gActiveBattler);
 
 	flags &= ~(MOVE_EFFECT_AFFECTS_USER);
 
@@ -335,7 +338,7 @@ u8 ChangeStatBuffs(s8 statValue, u8 statId, u8 flags, const u8* BS_ptr)
 
 		else if ((IsClearBodyAbility(ability)
 			  || (ability == ABILITY_FLOWERVEIL && IsOfType(gActiveBattler, TYPE_GRASS))
-			  || ITEM_EFFECT(gActiveBattler) == ITEM_EFFECT_CLEAR_AMULET)
+			  || (ITEM_EFFECT(gActiveBattler) == ITEM_EFFECT_CLEAR_AMULET && gActiveBattler != gBankAttacker))
 		&& !certain && gCurrentMove != MOVE_CURSE)
 		{
 			if (flags == STAT_CHANGE_BS_PTR)
@@ -349,9 +352,18 @@ u8 ChangeStatBuffs(s8 statValue, u8 statId, u8 flags, const u8* BS_ptr)
 					BattleScriptPush(BS_ptr);
 					gBattleScripting.bank = gActiveBattler;
 					gBattleCommunication[0] = gActiveBattler;
-					gBattlescriptCurrInstr = BattleScript_AbilityNoStatLoss;
-					gLastUsedAbility = gBattleMons[gActiveBattler].ability;
-					RecordAbilityBattle(gActiveBattler, gLastUsedAbility);
+					if (ITEM_EFFECT(gActiveBattler) == ITEM_EFFECT_CLEAR_AMULET && gActiveBattler != gBankAttacker)
+					{
+						gLastUsedItem = ITEM(gActiveBattler);
+						gBattlescriptCurrInstr = BattleScript_ClearAmuletNoStatLoss;
+						RecordItemEffectBattle(gActiveBattler, ITEM_EFFECT_CLEAR_AMULET);
+					}
+					else
+					{
+						gBattlescriptCurrInstr = BattleScript_AbilityNoStatLoss;
+						gLastUsedAbility = ABILITY(gActiveBattler);
+						RecordAbilityBattle(gActiveBattler, gLastUsedAbility);
+					}
 					gSpecialStatuses[gActiveBattler].statLowered = 1;
 				}
 			}
@@ -382,9 +394,9 @@ u8 ChangeStatBuffs(s8 statValue, u8 statId, u8 flags, const u8* BS_ptr)
 		}
 
 		else if (!certain
-		&& (AbilityPreventsLoweringStat(ability, statId) || (MindsEyePreventsLoweringStat(ability, statId)
-		&& SpeciesHasMindsEye(gBankTarget)) || (IsIntimidateActive() && AbilityBlocksIntimidate(ability)
-		&& !SpeciesHasMindsEye(SPECIES(bank)))) && !SpeciesHasGuardDog(SPECIES(bank)))
+		&& (AbilityPreventsLoweringStat(ability, statId)
+		 || MindsEyePreventsLoweringStat(ability, statId)
+		 || (IsIntimidateActive() && AbilityBlocksIntimidate(ability))))
 		{
 			if (flags == STAT_CHANGE_BS_PTR)
 			{
@@ -414,7 +426,9 @@ u8 ChangeStatBuffs(s8 statValue, u8 statId, u8 flags, const u8* BS_ptr)
 			}
 			return STAT_CHANGE_DIDNT_WORK;
 		}
-		else if (!certain && GuardDogPreventsLoweringStat(ability, statId, bank))
+		else if (!certain
+		&& IsIntimidateActive()
+		&& GuardDogPreventsLoweringStat(ability, statId, bank))
 		{
 			if (flags == STAT_CHANGE_BS_PTR)
 			{
@@ -515,6 +529,21 @@ u8 ChangeStatBuffs(s8 statValue, u8 statId, u8 flags, const u8* BS_ptr)
 			gBattleCommunication[MULTISTRING_CHOOSER] = (gBankTarget == gActiveBattler);
 
 		gNewBS->statRoseThisRound[gActiveBattler] = TRUE;
+
+		// Mirror Herb queues every opposing stat increase from the current effect,
+		// then copies them together when held-item effects are processed.
+		for (bank = 0; bank < gBattlersCount; ++bank)
+		{
+			if (SIDE(bank) != SIDE(gActiveBattler)
+			&& ITEM_EFFECT(bank) == ITEM_EFFECT_MIRROR_HERB
+			&& STAT_STAGE(bank, statId) < STAT_STAGE_MAX)
+			{
+				u8 increase = statValue;
+				if (increase > STAT_STAGE_MAX - STAT_STAGE(gActiveBattler, statId))
+					increase = STAT_STAGE_MAX - STAT_STAGE(gActiveBattler, statId);
+				gNewBS->mirrorHerbStatBoosts[bank][statId - 1] += increase;
+			}
+		}
 	}
 
 	gBattleMons[gActiveBattler].statStages[statId - 1] += statValue;
@@ -532,7 +561,7 @@ u8 ChangeStatBuffs(s8 statValue, u8 statId, u8 flags, const u8* BS_ptr)
 	return STAT_CHANGE_WORKED;
 }
 
-u8 CanStatNotBeLowered(u8 statId, u8 bankDef, u8 bankAtk, u8 defAbility)
+u8 CanStatNotBeLowered(u8 statId, u8 bankDef, u8 bankAtk, ability_t defAbility)
 {
 	if (!BATTLER_ALIVE(bankDef))
 		return STAT_FAINTED; 
@@ -552,17 +581,17 @@ u8 CanStatNotBeLowered(u8 statId, u8 bankDef, u8 bankAtk, u8 defAbility)
 
 	if (IsClearBodyAbility(defAbility)
 	|| (defAbility == ABILITY_FLOWERVEIL && IsOfType(bankDef, TYPE_GRASS))
-	|| ITEM_EFFECT(bankDef) == ITEM_EFFECT_CLEAR_AMULET)
+	|| (ITEM_EFFECT(bankDef) == ITEM_EFFECT_CLEAR_AMULET && bankDef != bankAtk))
 		return STAT_PROTECTED_BY_GENERAL_ABILITY;
 	else if (ABILITY(PARTNER(bankDef)) == ABILITY_FLOWERVEIL && IsOfType(bankDef, TYPE_GRASS))
 		return STAT_PROTECTED_BY_PARTNER_ABILITY;
-	else if (AbilityPreventsLoweringStat(defAbility, statId) || (MindsEyePreventsLoweringStat(defAbility, statId) && SpeciesHasMindsEye(gBankTarget)))
+	else if (AbilityPreventsLoweringStat(defAbility, statId) || MindsEyePreventsLoweringStat(defAbility, statId))
 		return STAT_PROTECTED_BY_SPECIFIC_ABILITY;
 
 	return STAT_CAN_BE_LOWERED;
 }
 
-bool8 CanStatBeLowered(u8 statId, u8 bankDef, u8 bankAtk, u8 defAbility)
+bool8 CanStatBeLowered(u8 statId, u8 bankDef, u8 bankAtk, ability_t defAbility)
 {
 	return CanStatNotBeLowered(statId, bankDef, bankAtk, defAbility) == STAT_CAN_BE_LOWERED;
 }

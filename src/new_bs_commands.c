@@ -98,8 +98,8 @@ void atkFC_clearspecialstatusbit(void)
 //jumpifabilitypresenttargetfield ABILITY ROM_OFFSET
 void atkFD_jumpifabilitypresenttargetfield(void)
 {
-	u8 ability = gBattlescriptCurrInstr[1];
-	u8* ptr = T1_READ_PTR(gBattlescriptCurrInstr + 2);
+	ability_t ability = T1_READ_16(gBattlescriptCurrInstr + 1);
+	u8* ptr = T1_READ_PTR(gBattlescriptCurrInstr + 3);
 
 	if (ABILITY(gBankTarget) == ability)
 		gBattleScripting.bank = gBankTarget;
@@ -107,7 +107,7 @@ void atkFD_jumpifabilitypresenttargetfield(void)
 		gBattleScripting.bank = PARTNER(gBankTarget);
 	else
 	{
-		gBattlescriptCurrInstr += 6;
+		gBattlescriptCurrInstr += 7;
 		return;
 	}
 
@@ -317,7 +317,10 @@ void atkFF08_counterclear(void)
 			break;
 		case Counters_GlaiveRush:
 			if (gNewBS->GlaiveRushTimers[bank])
+			{
 				gNewBS->GlaiveRushTimers[bank] = 0;
+				gStatuses3[bank] &= ~STATUS3_GLAIVERUSH;
+			}
 			else
 				failed = TRUE;
 			break;
@@ -514,10 +517,10 @@ void atkFF09_jumpifcounter(void)
 void atkFF0A_setability(void)
 {
 	u8 bank = GetBankForBattleScript(gBattlescriptCurrInstr[1]);
-	u8 ability = gBattlescriptCurrInstr[2];
+	ability_t ability = T1_READ_16(gBattlescriptCurrInstr + 2);
 	*GetAbilityLocation(bank) = ability;
 	ResetTookAbilityFrom(bank);
-	gBattlescriptCurrInstr += 3;
+	gBattlescriptCurrInstr += 4;
 }
 
 //jumpiftargetpartner ROM_OFFSET
@@ -556,6 +559,10 @@ void atkFF0E_setcounter(void)
 			break;
 		case Counters_GlaiveRush:
 			gNewBS->GlaiveRushTimers[bank] = amount;
+			if (amount)
+				gStatuses3[bank] |= STATUS3_GLAIVERUSH;
+			else
+				gStatuses3[bank] &= ~STATUS3_GLAIVERUSH;
 			break;
 		case Counters_Embargo:
 			gNewBS->EmbargoTimers[bank] = amount;
@@ -792,20 +799,20 @@ void atkFF19_formchange(void)
 //jumpifabilitypresentattackerfield ABILITY ROM_OFFSET
 void atkFF1A_jumpifabilitypresentattackerfield(void)
 {
-	u8 ability = gBattlescriptCurrInstr[1];
-	u8* ptr = T1_READ_PTR(gBattlescriptCurrInstr + 2);
+	ability_t ability = T1_READ_16(gBattlescriptCurrInstr + 2);
+	u8* ptr = T1_READ_PTR(gBattlescriptCurrInstr + 4);
 
 	if (AbilityBattleEffects(ABILITYEFFECT_CHECK_BANK_SIDE, gBankAttacker, ability, 0, 0))
 		gBattlescriptCurrInstr = ptr;
 	else
-		gBattlescriptCurrInstr += 6;
+		gBattlescriptCurrInstr += 8;
 }
 
 //tryactivateswitchinability BANK
 void atkFF1B_tryactivateswitchinability(void)
 {
-	u8 bank = GetBankForBattleScript(gBattlescriptCurrInstr[1]);
-	gBattlescriptCurrInstr += 2;
+	u8 bank = GetBankForBattleScript(gBattlescriptCurrInstr[2]);
+	gBattlescriptCurrInstr += 3;
 	AbilityBattleEffects(ABILITYEFFECT_ON_SWITCHIN, bank, 0, 0, 0);
 }
 
@@ -909,7 +916,7 @@ void atkFF21_tryspectralthiefsteal(void)
 {
 	s8 increment = 1;
 	bool8 success = FALSE;
-	u8 atkAbility = ABILITY(gBankAttacker);
+	ability_t atkAbility = ABILITY(gBankAttacker);
 
 	for (int i = 0; i < BATTLE_STATS_NO-1; ++i)
 	{
@@ -996,22 +1003,11 @@ void atkFE_prefaintmoveendeffects(void)
 						}
 						break;
 
-					case ABILITY_POISONTOUCH: ;
-						u8 chance = 30;
-						if (BankHasRainbow(gBankAttacker))
-							chance *= 2;
+					case ABILITY_POISONTOUCH:
+					{
+						u8 chance = BankHasRainbow(gBankAttacker) ? 60 : 30;
 
-						if (ABILITY(gBankTarget) != ABILITY_SHIELDDUST
-						&& ITEM_EFFECT(gBankTarget) != ITEM_EFFECT_COVERT_CLOAK
-						&& CanBePoisoned(gBankTarget, gBankAttacker, TRUE)
-						&& umodsi(Random(), 100) < chance
-						&& SpeciesHasToxicChain(SPECIES(gBankAttacker)))
-						{
-							BattleScriptPushCursor();
-							gBattlescriptCurrInstr = BattleScript_ToxicChain;
-							effect = TRUE;
-						}
-						else if (CheckContact(gCurrentMove, gBankAttacker, gBankTarget)
+						if (CheckContact(gCurrentMove, gBankAttacker, gBankTarget)
 						&& ABILITY(gBankTarget) != ABILITY_SHIELDDUST
 						&& ITEM_EFFECT(gBankTarget) != ITEM_EFFECT_COVERT_CLOAK
 						&& CanBePoisoned(gBankTarget, gBankAttacker, TRUE)
@@ -1021,6 +1017,18 @@ void atkFE_prefaintmoveendeffects(void)
 							gBattlescriptCurrInstr = BattleScript_PoisonTouch;
 							effect = TRUE;
 						}
+						break;
+					}
+
+					case ABILITY_TOXICCHAIN:
+						if (CanBePoisoned(gBankTarget, gBankAttacker, TRUE)
+						&& umodsi(Random(), 100) < 30)
+						{
+							BattleScriptPushCursor();
+							gBattlescriptCurrInstr = BattleScript_ToxicChain;
+							effect = TRUE;
+						}
+						break;
 				}
 			}
 			gNewBS->preFaintEffectsState++;
@@ -1499,9 +1507,7 @@ void atkFF29_trysetsleep(void)
 	{
 		switch (ABILITY(bank)) {
 			case ABILITY_INSOMNIA:
-			#ifdef ABILITY_VITALSPIRIT
 			case ABILITY_VITALSPIRIT:
-			#endif
 				gBattlescriptCurrInstr = BattleScript_TargetStayedAwakeUsingAbility;
 				return;
 			case ABILITY_LEAFGUARD:
@@ -1610,9 +1616,7 @@ void atkD7_setyawn(void)
 	{
 		switch (ABILITY(bank)) {
 			case ABILITY_INSOMNIA:
-			#ifdef ABILITY_VITALSPIRIT
 			case ABILITY_VITALSPIRIT:
-			#endif
 				gBattlescriptCurrInstr = BattleScript_TargetStayedAwakeUsingAbility;
 				return;
 			case ABILITY_LEAFGUARD:
@@ -1936,6 +1940,7 @@ void atkFF2C_trysetpoison(void)
 				}
 				break;
 			case ABILITY_IMMUNITY:
+			case ABILITY_PURIFYINGSALT:
 			case ABILITY_COMATOSE:
 				gBattlescriptCurrInstr = BattleScript_ProtectedByAbility;
 				return;

@@ -59,6 +59,9 @@ item_battle_scripts.s
 .global BattleScript_EjectPackEnd2
 .global BattleScript_EjectPackRet
 .global BattleScript_EjectPackCMD49
+.global BattleScript_MirrorHerbRet
+.global BattleScript_MirrorHerbEnd2
+.global BattleScript_ClearAmuletNoStatLoss
 .global BattleScript_RedCard
 .global BattleScript_HangedOnFocusSash
 .global BattleScript_Gems
@@ -496,6 +499,27 @@ BattleScript_EjectPackGiveEXP:
 	getexp 0x0
 	callasm SetSkipCertainSwitchInAbilities
 	goto BattleScript_EjectPackRet
+
+BattleScript_MirrorHerbEnd2:
+	call BattleScript_MirrorHerbRet
+	end2
+
+BattleScript_MirrorHerbRet:
+	playanimation BANK_SCRIPTING ANIM_ITEM_USE 0x0
+	setword BATTLE_STRING_LOADER MirrorHerbString
+	printstring 0x184
+	waitmessage DELAY_1SECOND
+	removeitem BANK_SCRIPTING
+	return
+
+BattleScript_ClearAmuletNoStatLoss:
+	pause 0x10
+	playanimation BANK_SCRIPTING ANIM_ITEM_USE 0x0
+	setword BATTLE_STRING_LOADER gText_NotAffectedBecauseOfItem
+	printstring 0x184
+	waitmessage DELAY_1SECOND
+	setbyte MULTISTRING_CHOOSER 0x4
+	return
 	
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
@@ -508,6 +532,8 @@ BattleScript_RedCard:
 	jumpifdynamaxed BANK_ATTACKER RedCard_Dynamax
 	jumpifspecialstatusflag BANK_ATTACKER STATUS3_ROOTED 0x0 RedCard_Ingrain
 	jumpifability BANK_ATTACKER ABILITY_SUCTIONCUPS RedCard_SuctionCups
+	callasm CheckAttackerGuardDog
+	jumpifbyte EQUALS MULTISTRING_CHOOSER 0x1 RedCard_GuardDog
 	forcerandomswitch BANK_ATTACKER BANK_TARGET RedCardEnd
 
 RedCardEnd:
@@ -532,6 +558,16 @@ RedCard_SuctionCups:
 	setword BATTLE_STRING_LOADER RedCardSuctionCupsString
 	printstring 0x184
 	waitmessage DELAY_1SECOND
+	goto RedCardEnd
+
+RedCard_GuardDog:
+	copybyte FORM_COUNTER BATTLE_SCRIPTING_BANK
+	copyarray BATTLE_SCRIPTING_BANK USER_BANK 0x1
+	call BattleScript_AbilityPopUp
+	printstring 0xCC @STRINGID_PKMNANCHORSITSELFWITH
+	waitmessage DELAY_1SECOND
+	call BattleScript_AbilityPopUpRevert
+	copybyte BATTLE_SCRIPTING_BANK FORM_COUNTER
 	goto RedCardEnd
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@

@@ -22,10 +22,13 @@
 #include "../include/gba/macro.h"
 
 #include "../include/new/ai_util.h"
+#include "../include/new/ability_battle_scripts.h"
 #include "../include/new/battle_indicators.h"
 #include "../include/new/battle_script_util.h"
+#include "../include/new/battle_util.h"
 #include "../include/new/dynamax.h"
 #include "../include/new/frontier.h"
+#include "../include/new/form_change.h"
 #include "../include/new/mega.h"
 #include "../include/new/move_battle_scripts.h"
 #include "../include/new/ram_locs.h"
@@ -81,7 +84,100 @@ const u16 gTeraBlendColors[] =
 // Check if the Pokemon has terastallized or not
 bool8 IsTerastallized(u8 bank)
 {
-    return gNewBS->teraData.done[GetBattlerSide(bank)][gBattlerPartyIndexes[bank]];
+    if (gNewBS == NULL || bank >= gBattlersCount)
+        return FALSE;
+
+    u8 partyIndex = gBattlerPartyIndexes[bank];
+    if (partyIndex >= PARTY_SIZE)
+        return FALSE;
+
+    return gNewBS->teraData.done[GetBattlerSide(bank)][partyIndex];
+}
+
+static bool8 IsOgerponSpecies(u16 species)
+{
+    switch (species)
+    {
+    case SPECIES_OGERPON:
+    case SPECIES_OGERPON_WELLSPRING_MASK:
+    case SPECIES_OGERPON_HEARTHFLAME_MASK:
+    case SPECIES_OGERPON_CORNERSTONE_MASK:
+    case SPECIES_OGERPON_GREEN:
+    case SPECIES_OGERPON_BLUE:
+    case SPECIES_OGERPON_RED:
+    case SPECIES_OGERPON_GREY:
+        return TRUE;
+    default:
+        return FALSE;
+    }
+}
+
+static u8 GetFixedTeraType(const struct Pokemon *mon)
+{
+    u16 species = GetMonData(mon, MON_DATA_SPECIES, NULL);
+
+    switch (species)
+    {
+    case SPECIES_TERAPAGOS:
+    case SPECIES_TERAPAGOS_TERASTAL:
+    case SPECIES_TERAPAGOS_STELLAR:
+        return TYPE_STELLAR;
+    }
+
+    if (!IsOgerponSpecies(species))
+        return TYPE_BLANK;
+
+    switch (GetMonData(mon, MON_DATA_HELD_ITEM, NULL))
+    {
+    case ITEM_WELLSPRING_MASK:
+        return TYPE_WATER;
+    case ITEM_HEARTHFLAME_MASK:
+        return TYPE_FIRE;
+    case ITEM_CORNERSTONE_MASK:
+        return TYPE_ROCK;
+    }
+
+    switch (species)
+    {
+    case SPECIES_OGERPON_WELLSPRING_MASK:
+    case SPECIES_OGERPON_BLUE:
+        return TYPE_WATER;
+    case SPECIES_OGERPON_HEARTHFLAME_MASK:
+    case SPECIES_OGERPON_RED:
+        return TYPE_FIRE;
+    case SPECIES_OGERPON_CORNERSTONE_MASK:
+    case SPECIES_OGERPON_GREY:
+        return TYPE_ROCK;
+    default:
+        return TYPE_GRASS;
+    }
+}
+
+u8 GetMonTeraType(const struct Pokemon *mon)
+{
+    u8 fixedType;
+
+    if (mon == NULL)
+        return TYPE_BLANK;
+
+    fixedType = GetFixedTeraType(mon);
+    if (fixedType != TYPE_BLANK)
+        return fixedType;
+
+    return mon->teraType < NUMBER_OF_MON_TYPES ? mon->teraType : TYPE_BLANK;
+}
+
+bool8 CanChangeMonTeraType(const struct Pokemon *mon)
+{
+    return mon != NULL && GetFixedTeraType(mon) == TYPE_BLANK;
+}
+
+void CanChangeTeraTypeInOW(void)
+{
+    u8 partySlot = VarGet(Var8002);
+
+    VarSet(VAR_TEMP_1, partySlot < PARTY_SIZE
+                         && CanChangeMonTeraType(&gPlayerParty[partySlot]));
 }
 
 // Fetch the Pokemon's current Tera Type
@@ -89,12 +185,15 @@ u8 GetTeraType(u8 bank)
 {
     struct Pokemon *mon;
 
+    if (bank >= gBattlersCount || gBattlerPartyIndexes[bank] >= PARTY_SIZE)
+        return TYPE_BLANK;
+
     if (GetBattlerSide(bank) == B_SIDE_PLAYER)
         mon = &gPlayerParty[gBattlerPartyIndexes[bank]];
     else
         mon = &gEnemyParty[gBattlerPartyIndexes[bank]];
 
-    return mon->teraType;
+    return GetMonTeraType(mon);
 }
 
 // Fetch the Pokemon's Tera Type from OW (scripts)
@@ -109,11 +208,7 @@ void GetTeraTypeInOW(void)
         return;
     }
 
-    // Fetch Correct Pokemon's Tera Type
-    u8 monTeraType = gPlayerParty[partySlot].teraType;
-
-    // Ensure Tera Type is within range
-    VarSet(VAR_TEMP_1, (monTeraType < NUMBER_OF_MON_TYPES) ? monTeraType : TYPE_BLANK);
+    VarSet(VAR_TEMP_1, GetMonTeraType(&gPlayerParty[partySlot]));
 }
 
 // Change the Pokemon's Tera type in OW
@@ -127,6 +222,9 @@ void ChangeTeraTypeInOW(void)
         return;
 
     if (newTeraType >= NUMBER_OF_MON_TYPES)
+        return;
+
+    if (!CanChangeMonTeraType(&gPlayerParty[partySlot]))
         return;
 
     gPlayerParty[partySlot].teraType = newTeraType;
@@ -167,11 +265,15 @@ static const u8 *const sTypeNames[NUMBER_OF_MON_TYPES] =
 // Main Function - Try type changes
 u8 *DoTerastallize(u8 bank)
 {
-    if (!IsTerastallized(bank))
+    if (gNewBS != NULL && bank < gBattlersCount && !IsTerastallized(bank))
     {
         u8 teraType = GetTeraType(bank);
         u8 partyIndex = gBattlerPartyIndexes[bank];
         struct Pokemon *mon;
+
+        if (partyIndex >= PARTY_SIZE || teraType >= NUMBER_OF_MON_TYPES || teraType == TYPE_BLANK
+         || teraType == TYPE_MYSTERY || teraType == TYPE_ROOSTLESS)
+            return NULL;
 
         if (GetBattlerSide(bank) == B_SIDE_PLAYER)
             mon = &gPlayerParty[partyIndex];
@@ -185,12 +287,88 @@ u8 *DoTerastallize(u8 bank)
         // Because Stellar Tera Defensive Typing remains same
         if (teraType != TYPE_STELLAR)
             SET_BATTLER_TYPE(bank, teraType);
+
+        // Terastallization-specific form changes must happen before resolving
+        // Embody Aspect / Teraform Zero, since the new form owns the Ability.
+        switch (species)
+        {
+        case SPECIES_OGERPON:
+            DoFormChange(bank, SPECIES_OGERPON_GREEN, TRUE, TRUE, TRUE);
+            break;
+        case SPECIES_OGERPON_WELLSPRING_MASK:
+            DoFormChange(bank, SPECIES_OGERPON_BLUE, TRUE, TRUE, TRUE);
+            break;
+        case SPECIES_OGERPON_HEARTHFLAME_MASK:
+            DoFormChange(bank, SPECIES_OGERPON_RED, TRUE, TRUE, TRUE);
+            break;
+        case SPECIES_OGERPON_CORNERSTONE_MASK:
+            DoFormChange(bank, SPECIES_OGERPON_GREY, TRUE, TRUE, TRUE);
+            break;
+        case SPECIES_TERAPAGOS_TERASTAL:
+            DoFormChange(bank, SPECIES_TERAPAGOS_STELLAR, TRUE, TRUE, TRUE);
+            break;
+        }
+
+        switch (ABILITY(bank))
+        {
+        case ABILITY_TERAFORMZERO:
+            gBattleWeather = 0;
+            gWishFutureKnock.weatherDuration = 0;
+            gTerrainType = 0;
+            gNewBS->TerrainTimer = 0;
+            break;
+        }
         GetSpeciesName(gStringVar1, species);
         StringCopy(gStringVar2, sTypeNames[teraType]);
 
         return BattleScript_Terastallize;
     }
     return NULL;
+}
+
+// The Terapagos form change can alter max HP. The form-change controller
+// updates the party data asynchronously, so refresh the complete healthbox
+// after the battle script has waited for that transfer to finish.
+void RefreshFormChangeHealthbox(void)
+{
+    u8 bank = gBattleScripting.bank;
+
+    if (bank < gBattlersCount)
+        UpdateHealthboxAttribute(gHealthboxSpriteIds[bank], GetBankPartyData(bank), HEALTHBOX_ALL);
+}
+
+void TryActivateTeraFormAbility(void)
+{
+	u8 bank = gBattleScripting.bank;
+	u8 stat = 0;
+
+	switch (ABILITY(bank))
+	{
+	case ABILITY_EMBODYASPECTTEALMASK:
+		stat = STAT_SPEED;
+		break;
+	case ABILITY_EMBODYASPECTHEARTHFLAMEMASK:
+		stat = STAT_ATK;
+		break;
+	case ABILITY_EMBODYASPECTWELLSPRINGMASK:
+		stat = STAT_SPDEF;
+		break;
+	case ABILITY_EMBODYASPECTCORNERSTONEMASK:
+		stat = STAT_DEF;
+		break;
+	case ABILITY_TERAFORMZERO:
+		BattleScriptPush(gBattlescriptCurrInstr + 5);
+		gBattlescriptCurrInstr = BattleScript_TeraformZeroActivates - 5;
+		return;
+	}
+
+	if (stat != 0 && STAT_STAGE(bank, stat) < STAT_STAGE_MAX)
+	{
+		gBankTarget = bank;
+		gBattleScripting.statChanger = stat | INCREASE_1;
+		BattleScriptPush(gBattlescriptCurrInstr + 5);
+		gBattlescriptCurrInstr = BattleScript_TargetAbilityStatRaise - 5;
+	}
 }
 
 // AI Logic for Terastallization
@@ -230,19 +408,23 @@ bool8 CanTerastallize(u8 bank)
 		return FALSE;
 	#else
 
-    // Terastallization disabled in Dynamax battles
-    if (gBattleTypeFlags & BATTLE_TYPE_DYNAMAX)
-        return FALSE; 
-
-    if (GetBattlerSide(bank) == B_SIDE_OPPONENT)
-        return TRUE;
-    else
-    {
-        if (FlagGet(FLAG_TERA_BATTLE) && !IsTerastallized(bank))
-            return TRUE;
-
+    if (gNewBS == NULL || bank >= gBattlersCount || gBattlerPartyIndexes[bank] >= PARTY_SIZE)
         return FALSE;
+
+    u8 teraType = GetTeraType(bank);
+    if (teraType >= NUMBER_OF_MON_TYPES || teraType == TYPE_BLANK
+     || teraType == TYPE_MYSTERY || teraType == TYPE_ROOSTLESS
+     || IsTerastallized(bank) || !TerastalEnabled(bank))
+        return FALSE;
+
+    u8 side = GetBattlerSide(bank);
+    for (u8 i = 0; i < PARTY_SIZE; ++i)
+    {
+        if (gNewBS->teraData.done[side][i])
+            return FALSE;
     }
+
+    return TRUE;
     #endif
 }
 
@@ -335,16 +517,27 @@ static item_t FindBankTeraOrb(u8 bank)
 // Check for both
 bool8 TerastalEnabled(u8 bank)
 {
+    if (gNewBS == NULL || bank >= gBattlersCount || gBattlerPartyIndexes[bank] >= PARTY_SIZE)
+        return FALSE;
+
     // Terastallization disabled in Dynamax battles
     if (gBattleTypeFlags & BATTLE_TYPE_DYNAMAX)
+        return FALSE;
+
+    // Gimmick exclusivity applies to both player and opponent battlers.
+    if (CanMegaEvolve(bank, FALSE) || CanMegaEvolve(bank, TRUE) || HasMegaSymbol(bank))
+        return FALSE;
+
+    if (IsZCrystal(ITEM(bank)) || IsDynamaxed(bank)
+     || gNewBS->dynamaxData.used[bank] || gNewBS->dynamaxData.toBeUsed[bank])
         return FALSE;
 
     // Opponents don't rely on held Tera Orbs
     if (GetBattlerSide(bank) == B_SIDE_OPPONENT)
     {
         // Wild Battle check
-        if (!((gBattleTypeFlags & (BATTLE_TYPE_TRAINER | BATTLE_TYPE_EREADER_TRAINER | BATTLE_TYPE_TRAINER_TOWER)) == BATTLE_TYPE_TRAINER)
-        ||   (gBattleTypeFlags & BATTLE_TYPE_INGAME_PARTNER))     
+        if (!(gBattleTypeFlags & (BATTLE_TYPE_TRAINER | BATTLE_TYPE_EREADER_TRAINER | BATTLE_TYPE_TRAINER_TOWER))
+         && !(gBattleTypeFlags & BATTLE_TYPE_INGAME_PARTNER))
             return FALSE;
 
         if (!FlagGet(FLAG_TERA_BATTLE))
@@ -355,19 +548,6 @@ bool8 TerastalEnabled(u8 bank)
 
     // The rest of the code assumes B_SIDE_PLAYER
     if (!FlagGet(FLAG_TERA_BATTLE))
-        return FALSE;
-
-    // Only one gimmick allowed - Mega and Z take precedence
-    if (CanMegaEvolve(bank, FALSE) || CanMegaEvolve(bank, TRUE) || HasMegaSymbol(bank))
-        return FALSE;
-
-    if (IsZCrystal(ITEM(bank)))
-        return FALSE;
-
-    // Can't Terastallize if this mon is Dynamaxing
-    if (IsDynamaxed(bank)
-    || gNewBS->dynamaxData.used[bank]
-    || gNewBS->dynamaxData.toBeUsed[bank])
         return FALSE;
 
     if (FindBankTeraOrb(bank) != ITEM_NONE)
@@ -387,8 +567,8 @@ u8 GetRandomTeraType(void)
 
     // Reroll if invalid type
     do randomType = Random() % NUMBER_OF_MON_TYPES;
-    while ((randomType == TYPE_BLANK) || (randomType == TYPE_MYSTERY) || (randomType == TYPE_BLANK)
-            || (randomType == 0x12) || (randomType == 0x16) || (randomType == TYPE_ROOSTLESS));
+    while (randomType == TYPE_BLANK || randomType == TYPE_MYSTERY
+        || randomType == 0x12 || randomType == 0x16 || randomType == TYPE_ROOSTLESS);
 
     return randomType;
 }
@@ -402,6 +582,13 @@ void SetGiftMonTeraType(void)
 
     struct Pokemon* mon = &gPlayerParty[partySlot];
     u16 species = mon->species;
+    u8 fixedType = GetFixedTeraType(mon);
+
+    if (fixedType != TYPE_BLANK)
+    {
+        mon->teraType = fixedType;
+        return;
+    }
 
     u8 type1 = gBaseStats[species].type1;
     u8 type2 = gBaseStats[species].type2;
@@ -748,7 +935,7 @@ static const struct SpriteTemplate *const gTeraTypeIconSpriteTemplates[NUMBER_OF
 void TeraIconSummaryScreen(void)
 {
     struct Sprite* ballSprite = &gSprites[sMonSummaryScreen->ballIconSpriteId];
-	u8 teraType = GetMonData(&sMonSummaryScreen->currentMon, MON_DATA_TERA_TYPE, NULL);
+	u8 teraType = GetMonTeraType(&sMonSummaryScreen->currentMon);
 	if (teraType < NUMBER_OF_MON_TYPES)
 	{
 		LoadSpriteSheet(sTeraTypeIconSheets[teraType]);

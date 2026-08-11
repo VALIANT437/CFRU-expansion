@@ -21,7 +21,7 @@ extern const struct StatFractions gAccuracyStageRatios[];
 
 //This file's functions:
 static bool8 AccuracyCalcHelper(move_t, u8 bankDef);
-static u32 AccuracyCalcPassDefAbilityItemEffect(u16 move, u8 bankAtk, u8 bankDef, u8 defAbility, u8 defEffect);
+static u32 AccuracyCalcPassDefAbilityItemEffect(u16 move, u8 bankAtk, u8 bankDef, ability_t defAbility, u8 defEffect);
 static u8 TryAdjustAccuracyForOriginForms(u8 moveAcc, u16 move, u8 bankAtk);
 
 void atk01_accuracycheck(void)
@@ -82,7 +82,8 @@ ACCURACY_CHECK_START:
 
 		if (gNewBS->ParentalBondOn == 1
 		||  (gNewBS->MultiHitOn && (gBattleMoves[move].effect != EFFECT_TRIPLE_KICK
-						 || ABILITY(gBankAttacker) == ABILITY_SKILLLINK)))
+						 || ABILITY(gBankAttacker) == ABILITY_SKILLLINK
+						 || ITEM_EFFECT(gBankAttacker) == ITEM_EFFECT_LOADED_DICE)))
 		{
 			//No acc checks for second hit of Parental Bond or multi hit moves
 			TrySetDestinyBondToHappen();
@@ -198,6 +199,8 @@ bool8 ProtectAffects(u16 move, u8 bankAtk, u8 bankDef, bool8 set)
 	if (protectFlag && IsContactMove(move, bankAtk, bankDef) && ABILITY(bankAtk) == ABILITY_UNSEENFIST) //Uses IsContactMove instead of CheckContact because Protective Pads don't affect this Ability
 		protectFlag = FALSE;
 	#endif
+	if (protectFlag && IsContactMove(move, bankAtk, bankDef) && ABILITY(bankAtk) == ABILITY_PIERCINGDRILL)
+		protectFlag = FALSE;
 
 	if (protectFlag && move == MOVE_HYPERDRILL)
 		protectFlag = FALSE;
@@ -319,6 +322,7 @@ bool8 DoesProtectionMoveBlockMove(u8 bankAtk, u8 bankDef, u16 atkMove, u16 prote
 	#ifdef ABILITY_UNSEENFIST
 	&& ABILITY(bankAtk) != ABILITY_UNSEENFIST
 	#endif
+	&& ABILITY(bankAtk) != ABILITY_PIERCINGDRILL
 	)
 	{
 		switch (protectMove) {
@@ -390,7 +394,7 @@ static bool8 AccuracyCalcHelper(u16 move, u8 bankDef)
 	||   (gSpecialMoveFlags[move].gAlwaysHitWhenMinimizedMoves && gStatuses3[bankDef] & STATUS3_MINIMIZED)
 	||  ((gStatuses3[bankDef] & STATUS3_TELEKINESIS) && gBattleMoves[move].effect != EFFECT_0HKO)
 	||	 gBattleMoves[move].accuracy == 0
-	||  (gStatuses3[bankDef] & STATUS3_GLAIVERUSH)
+	||  ((gStatuses3[bankDef] & STATUS3_GLAIVERUSH) && SIDE(gBankAttacker) != SIDE(bankDef))
 	||  (move == MOVE_TACHYONCUTTER))
 	{
 		//JumpIfMoveFailed(7, move);
@@ -415,7 +419,7 @@ u32 AccuracyCalc(u16 move, u8 bankAtk, u8 bankDef)
 	return AccuracyCalcPassDefAbilityItemEffect(move, bankAtk, bankDef, ABILITY(bankDef), ITEM_EFFECT(bankDef));
 }
 
-static u32 AccuracyCalcPassDefAbilityItemEffect(u16 move, u8 bankAtk, u8 bankDef, u8 defAbility, u8 defEffect)
+static u32 AccuracyCalcPassDefAbilityItemEffect(u16 move, u8 bankAtk, u8 bankDef, ability_t defAbility, u8 defEffect)
 {
 	u8 moveAcc;
 	s8 buff;
@@ -424,14 +428,14 @@ static u32 AccuracyCalcPassDefAbilityItemEffect(u16 move, u8 bankAtk, u8 bankDef
 	//u8 defEffect  = ITEM_EFFECT(bankDef);
 	u8 atkQuality = ITEM_QUALITY(bankAtk);
 	u8 defQuality = ITEM_QUALITY(bankDef);
-	u8 atkAbility = ABILITY(bankAtk);
-	//u8 defAbility = ABILITY(bankDef);
+	ability_t atkAbility = ABILITY(bankAtk);
+	//ability_t defAbility = ABILITY(bankDef);
 	u8 moveSplit = CalcMoveSplit(move, bankAtk, bankDef);
 
 	u8 acc;
 	if (defAbility == ABILITY_UNAWARE)
 		acc = 6;
-	else if (defAbility == ABILITY_MINDSEYE && SpeciesHasMindsEye(SPECIES(bankDef)))
+	else if (atkAbility == ABILITY_MINDSEYE)
 		acc = 6;
 	else
 		acc = STAT_STAGE(bankAtk, STAT_STAGE_ACC);
@@ -443,7 +447,7 @@ static u32 AccuracyCalcPassDefAbilityItemEffect(u16 move, u8 bankAtk, u8 bankDef
 	{
 		buff = acc;
 	}
-	else if (atkAbility == ABILITY_KEENEYE)
+	else if (atkAbility == ABILITY_KEENEYE || atkAbility == ABILITY_MINDSEYE)
 	{
 		if (STAT_STAGE(bankDef, STAT_STAGE_EVASION) > 6) //Stops higher evasion, allows lower
 			buff = acc;
@@ -557,7 +561,7 @@ static u32 AccuracyCalcPassDefAbilityItemEffect(u16 move, u8 bankAtk, u8 bankDef
 u32 VisualAccuracyCalc(u16 move, u8 bankAtk, u8 bankDef)
 {
 	u8 defEffect  = GetRecordedItemEffect(bankDef);
-	u8 defAbility = GetRecordedAbility(bankDef);
+	ability_t defAbility = GetRecordedAbility(bankDef);
 	u32 acc = AccuracyCalcPassDefAbilityItemEffect(move, bankAtk, bankDef, defAbility, defEffect);
 
 	if (ABILITY(bankAtk) == ABILITY_NOGUARD || defAbility == ABILITY_NOGUARD
@@ -583,7 +587,7 @@ u32 VisualAccuracyCalc_NoTarget(u16 move, u8 bankAtk)
 	u32 calc;
 	u8 atkEffect  = ITEM_EFFECT(bankAtk);
 	u8 atkQuality = ITEM_QUALITY(bankAtk);
-	u8 atkAbility = ABILITY(bankAtk);
+	ability_t atkAbility = ABILITY(bankAtk);
 	u8 moveSplit = SPLIT(move);
 
 	acc = STAT_STAGE(bankAtk, STAT_STAGE_ACC);

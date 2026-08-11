@@ -17,6 +17,16 @@ extern u16 SparklePal[];
 
 static void SpriteCB_Sparkle(struct Sprite *sprite);
 
+static u16 GetFollowerMonSpecies(struct Pokemon *mon)
+{
+    u16 species = GetMonData(mon, MON_DATA_SPECIES, NULL);
+
+    if (species == SPECIES_PYROAR && GetMonGender(mon) == MON_FEMALE)
+        species = SPECIES_PYROAR_FEMALE;
+
+    return species;
+}
+
 static const struct OamData sSparkleOamData =
 {
     .y = 0,
@@ -116,25 +126,17 @@ void CreateSparkleSprite(void)
 
 u16 GetFollowerMonSprite(void)
 {
-    u8 slotId = 7;
-    u16 species;
-
-    for (u8 i = 0; i < gPlayerPartyCount; ++i)
-    {
-        if (!GetMonData(&gPlayerParty[i], MON_DATA_IS_EGG, NULL)
-         && GetMonData(&gPlayerParty[i], MON_DATA_HP, NULL) > 0)
-        {
-            slotId = i;
-            break;
-        }
-    }
-
-    if (slotId == 7)
+    struct Pokemon *mon = GetFirstValidPartyMon();
+    if (mon == NULL)
         return 0;
 
-    struct Pokemon* mon = &gPlayerParty[slotId];
-    species = GetMonData(mon, MON_DATA_SPECIES, NULL);
+    u16 species = GetFollowerMonSpecies(mon);
     return gFollowerMonSpriteIdTable[species] + 256;
+}
+
+bool8 HasLeadFollowerMon(void)
+{
+    return GetFirstValidPartyMon() != NULL;
 }
 
 void CreateFollowerMonObject(void)
@@ -159,13 +161,13 @@ void CreateFollowerMonObject(void)
      // Check if follower already exists before creating a new one
      for (u8 i = 0; i < MAP_OBJECTS_COUNT; i++)
      {
-         if (gEventObjects[i].localId == 30 && gEventObjects[i].active)
+         if (gEventObjects[i].localId == DEFAULT_FOLLOWER_LOCAL_ID && gEventObjects[i].active)
              return;  // There is already a follower, so don't create another one
     }
 
     struct EventObjectTemplate followerObj =
     {
-        .localId = 30,
+        .localId = DEFAULT_FOLLOWER_LOCAL_ID,
         .graphicsIdLowerByte = sprite & 0xFF,
         .graphicsIdUpperByte = sprite >> 8,
         .x = posX,
@@ -244,9 +246,12 @@ struct CompressedSpritePalette * GetSpritePalToUse(bool8 isShiny)
 
 u8 CreateMonSprite_MysteryGift(u16 species, s16 x, s16 y)
 {
-    struct Pokemon* mon = &gPlayerParty[0];
-    u32 personality = 0xFFFFFFFF;
-    u32 otId = T1_READ_32(gSaveBlock2->playerTrainerId);
+    struct Pokemon* mon = GetFirstValidPartyMon();
+    if (mon == NULL || species == SPECIES_NONE || species >= NUM_SPECIES)
+        return MAX_SPRITES;
+
+    u32 personality = GetMonData(mon, MON_DATA_PERSONALITY, NULL);
+    u32 otId = GetMonData(mon, MON_DATA_OT_ID, NULL);
     u16 isShiny = IsMonShiny(mon);
     const struct CompressedSpritePalette * spritePal = GetSpritePalToUse(isShiny);
     u16 spriteId = CreateMonPicSprite_HandleDeoxys(species, otId, personality, 1, x, y, 0, spritePal[species].tag);
@@ -268,6 +273,9 @@ bool8 ScriptMenu_ShowMysteryPokemonPic(u16 species, u8 x, u8 y)
     if (FindTaskIdByFunc(Task_ScriptShowMonPic) != 0xFF)
         return FALSE;
     spriteId = CreateMonSprite_MysteryGift(species, 8 * x + 40, 8 * y + 40);
+    if (spriteId >= MAX_SPRITES)
+        return FALSE;
+
     taskId = CreateTask(Task_ScriptShowMonPic, 80);
     gTasks[taskId].data[0] = 0;
     gTasks[taskId].data[1] = species;
@@ -281,7 +289,7 @@ bool8 ScriptMenu_ShowMysteryPokemonPic(u16 species, u8 x, u8 y)
 
 bool8 ShowMysteryGiftMon()
 {
-    u16 species = VarGet(0x4004);
+    u16 species = Var8004;
     u8 x = 0x1A;
     u8 y = 0x2;
 
@@ -314,18 +322,22 @@ void Remove_PokemonPic(void)
 }
 struct Pokemon* GetFirstValidPartyMon(void)
 {
-    for (int i = 0; i < PARTY_SIZE; i++)
+    for (u8 i = 0; i < PARTY_SIZE; ++i)
     {
-        struct Pokemon* mon = &gPlayerParty[i];
-
+        struct Pokemon *mon = &gPlayerParty[i];
         if (GetMonData(mon, MON_DATA_SPECIES, NULL) != SPECIES_NONE
-            && !GetMonData(mon, MON_DATA_IS_EGG, NULL)
-            && GetMonData(mon, MON_DATA_HP, NULL) > 0)
-        {
+         && !GetMonData(mon, MON_DATA_IS_EGG, NULL)
+         && GetMonData(mon, MON_DATA_HP, NULL) > 0)
             return mon;
-        }
     }
+
     return NULL;
+}
+
+void SetFollowerMonSpeciesVar(void)
+{
+    struct Pokemon *mon = GetFirstValidPartyMon();
+    Var8004 = mon == NULL ? SPECIES_NONE : GetMonData(mon, MON_DATA_SPECIES, NULL);
 }
 
 static u8 GetFollowerMapObjId(void)
@@ -1558,6 +1570,7 @@ static const u16 sSpeciesToPaletteTag[] =
     [SPECIES_BOMBIRDIER] = OBJ_EVENT_PAL_TAG_BOMBIRDIER_SHINY,
     [SPECIES_FINIZEN] = OBJ_EVENT_PAL_TAG_FINIZEN_SHINY,
     [SPECIES_PALAFIN] = OBJ_EVENT_PAL_TAG_PALAFIN_SHINY,
+    [SPECIES_PALAFIN_HERO] = OBJ_EVENT_PAL_TAG_PALAFIN_HERO_SHINY,
     [SPECIES_VAROOM] = OBJ_EVENT_PAL_TAG_VAROOM_SHINY,
     [SPECIES_REVAVROOM] = OBJ_EVENT_PAL_TAG_REVAVROOM_SHINY,
     [SPECIES_CYCLIZAR] = OBJ_EVENT_PAL_TAG_CYCLIZAR_SHINY,
@@ -1617,7 +1630,9 @@ static const u16 sSpeciesToPaletteTag[] =
     [SPECIES_WOOPER_P] = OBJ_EVENT_PAL_TAG_WOOPER_P_SHINY,
     [SPECIES_DIPPLIN] = OBJ_EVENT_PAL_TAG_DIPPLIN_SHINY,
     [SPECIES_POLTCHAGEIST] = OBJ_EVENT_PAL_TAG_POLTCHAGEIST_SHINY,
+    [SPECIES_POLTCHAGEIST_ARTISAN] = OBJ_EVENT_PAL_TAG_POLTCHAGEIST_SHINY,
     [SPECIES_SINISTCHA] = OBJ_EVENT_PAL_TAG_SINISTCHA_SHINY,
+    [SPECIES_SINISTCHA_MASTERPIECE] = OBJ_EVENT_PAL_TAG_SINISTCHA_SHINY,
     [SPECIES_OKIDOGI] = OBJ_EVENT_PAL_TAG_OKIDOGI_SHINY,
     [SPECIES_MUNKIDORI] = OBJ_EVENT_PAL_TAG_MUNKIDORI_SHINY,
     [SPECIES_FEZANDIPITI] = OBJ_EVENT_PAL_TAG_FEZANDIPITI_SHINY,
@@ -1625,6 +1640,10 @@ static const u16 sSpeciesToPaletteTag[] =
     [SPECIES_OGERPON_WELLSPRING_MASK] = OBJ_EVENT_PAL_TAG_OGERPON_1_SHINY,
     [SPECIES_OGERPON_HEARTHFLAME_MASK] = OBJ_EVENT_PAL_TAG_OGERPON_2_SHINY,
     [SPECIES_OGERPON_CORNERSTONE_MASK] = OBJ_EVENT_PAL_TAG_OGERPON_3_SHINY,
+    [SPECIES_OGERPON_GREEN] = OBJ_EVENT_PAL_TAG_OGERPON_SHINY,
+    [SPECIES_OGERPON_BLUE] = OBJ_EVENT_PAL_TAG_OGERPON_1_SHINY,
+    [SPECIES_OGERPON_RED] = OBJ_EVENT_PAL_TAG_OGERPON_2_SHINY,
+    [SPECIES_OGERPON_GREY] = OBJ_EVENT_PAL_TAG_OGERPON_3_SHINY,
     [SPECIES_ARCHALUDON] = OBJ_EVENT_PAL_TAG_ARCHALUDON_SHINY,
     [SPECIES_HYDRAPPLE] = OBJ_EVENT_PAL_TAG_HYDRAPPLE_SHINY,
     [SPECIES_GOUGING_FIRE] = OBJ_EVENT_PAL_TAG_GOUGING_FIRE_SHINY,
@@ -1633,6 +1652,7 @@ static const u16 sSpeciesToPaletteTag[] =
     [SPECIES_IRON_CROWN] = OBJ_EVENT_PAL_TAG_IRON_CROWN_SHINY,
     [SPECIES_TERAPAGOS] = OBJ_EVENT_PAL_TAG_TERAPAGOS_SHINY,
     [SPECIES_TERAPAGOS_TERASTAL] = OBJ_EVENT_PAL_TAG_TERAPAGOS_1_SHINY,
+    [SPECIES_TERAPAGOS_STELLAR] = OBJ_EVENT_PAL_TAG_TERAPAGOS_1_SHINY,
     [SPECIES_PECHARUNT] = OBJ_EVENT_PAL_TAG_PECHARUNT_SHINY,
     [SPECIES_URSALUNA_BLOODMOON] = OBJ_EVENT_PAL_TAG_URSALUNA_BM_SHINY,
     [SPECIES_MAUSHOLD_FOUR] = OBJ_EVENT_PAL_TAG_MAUSHOLD_F_SHINY,
@@ -1662,7 +1682,7 @@ void ChangeFollowerPalette(void)
     if (!IsMonShiny(mon))
         return;
 
-    u16 species = GetMonData(mon, MON_DATA_SPECIES, NULL);
+    u16 species = GetFollowerMonSpecies(mon);
     
     u16 paletteTag = (species < ARRAY_COUNT(sSpeciesToPaletteTag)) ? sSpeciesToPaletteTag[species] : 0x0000;
     if (paletteTag == 0x0000)

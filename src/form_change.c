@@ -109,7 +109,7 @@ void SwitchOutFormsRevert(u8 bank)
 {
 	struct Pokemon* mon = GetBankPartyData(bank);
 	u16 backupSpecies = mon->backupSpecies;
-	u8 ability = GetMonAbility(mon);
+	ability_t ability = GetMonAbility(mon);
 
 	if (IS_TRANSFORMED(bank))
 		return;
@@ -129,7 +129,7 @@ void SwitchOutFormsRevert(u8 bank)
 			if (backupSpecies != SPECIES_NONE)
 				DoFormChange(bank, backupSpecies, FALSE, TRUE, FALSE);
 			else
-				DoFormChange(bank, SPECIES_CHERRIM, FALSE, TRUE, FALSE);
+				DoFormChange(bank, SPECIES_DARMANITAN, FALSE, TRUE, FALSE);
 			break;
 		#endif
 
@@ -220,6 +220,19 @@ bool8 TryFormRevert(struct Pokemon* mon)
 	int i;
 	u16 species = mon->species;
 	u16 oldHP;
+
+	#if (defined SPECIES_TERAPAGOS && defined SPECIES_TERAPAGOS_TERASTAL && defined SPECIES_TERAPAGOS_STELLAR)
+	if (species == SPECIES_TERAPAGOS_TERASTAL || species == SPECIES_TERAPAGOS_STELLAR
+	 || mon->backupSpecies == SPECIES_TERAPAGOS_TERASTAL || mon->backupSpecies == SPECIES_TERAPAGOS_STELLAR)
+	{
+		mon->species = SPECIES_TERAPAGOS;
+		mon->backupSpecies = SPECIES_NONE;
+		oldHP = mon->hp;
+		CalculateMonStats(mon);
+		mon->hp = MathMin(mon->maxHP, oldHP);
+		return TRUE;
+	}
+	#endif
 
 	if (IsMinior(species))
 	{
@@ -455,18 +468,25 @@ void HandleFormChange(void)
 {
 	struct Pokemon* mon = GetBankPartyData(gActiveBattler);
 	struct BattlePokemon* battleMon = (struct BattlePokemon*) &gBattleBufferA[gActiveBattler][3];
+	u16 oldSpecies = GetMonData(mon, MON_DATA_SPECIES, NULL);
 	#ifdef UNBOUND
 	u8 oldGender = GetMonGender(mon);
 	#endif
 
-	mon->backupSpecies = GetMonData(mon, MON_DATA_SPECIES, NULL);
+	// Keep the species from before the first temporary form change.  The
+	// controller can receive more than one form-change update in a battle; if
+	// the backup is overwritten by a later update (for example while Zygarde is
+	// Complete), there is no longer a base form to restore after the battle.
+	if (mon->backupSpecies == SPECIES_NONE && oldSpecies != battleMon->species)
+		mon->backupSpecies = oldSpecies;
+
 	SetMonData(mon, MON_DATA_SPECIES, &battleMon->species);
 
 	#ifdef UNBOUND
 	//Try fix changed genders
 	typedef void (*ChangeMonGender_T) (struct Pokemon*);
 	#define ChangeMonGender ((ChangeMonGender_T) (0x0801D834 |1))
-	if (gBaseStats[mon->backupSpecies].genderRatio != gBaseStats[battleMon->species].genderRatio
+	if (gBaseStats[oldSpecies].genderRatio != gBaseStats[battleMon->species].genderRatio
 	&& oldGender != GetMonGender(mon))
 		ChangeMonGender(mon);
 	#endif
@@ -618,7 +638,7 @@ void HoldItemFormChange(struct Pokemon* mon, u16 item)
 	u16 targetSpecies = SPECIES_NONE;
 
 	u16 species = GetMonData(mon, MON_DATA_SPECIES, NULL);
-	u8 ability = GetMonAbility(mon);
+	ability_t ability = GetMonAbility(mon);
 	u8 itemEffect = ItemId_GetHoldEffect(item);
 	u8 type = ItemId_GetHoldEffectParam(item);
 
@@ -744,7 +764,7 @@ void HoldItemFormChange(struct Pokemon* mon, u16 item)
 		case SPECIES_SILVALLY_DRAGON:
 		case SPECIES_SILVALLY_DARK:
 		case SPECIES_SILVALLY_FAIRY:
-			if (ability == ABILITY_RKS_SYSTEM) //Only transform if set with proper ability
+			if (ability == ABILITY_RKSSYSTEM) //Only transform if set with proper ability
 			{
 				if (itemEffect == ITEM_EFFECT_MEMORY)
 					targetSpecies = gTypeToSilvallyForm[type];

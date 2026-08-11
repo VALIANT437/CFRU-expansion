@@ -1960,7 +1960,7 @@ s32 DoPoisonFieldEffect(void)
 	for (i = 0; i < PARTY_SIZE; i++)
 	{
 		mon = &gPlayerParty[i];
-		u8 ability = GetMonAbility(mon);
+		ability_t ability = GetMonAbility(mon);
 		if (GetMonData(mon, MON_DATA_SPECIES, NULL) != SPECIES_NONE
 		&& GetMonPrimaryAilments(mon->condition) == AILMENT_PSN
 		&& ability != ABILITY_POISONHEAL && ability != ABILITY_MAGICGUARD)
@@ -2840,6 +2840,10 @@ void WarpFadeOutScreen(void)
 }
 
 //Stuff to do with pressing buttons in the field//
+#ifdef DEBUG_OVERWORLD_MENU
+extern const u8 SystemScript_DebugMenu[];
+#endif
+
 static const u8* sRegisteredItemStringVars[][2] =
 {
 	{gStringVar7, gText_RegisteredItemSelectButton},
@@ -2858,8 +2862,21 @@ void FieldCheckIfPlayerPressedLButton(struct FieldInput* input, u16 newKeys)
 
 bool8 ProcessNewFieldPlayerInput(struct FieldInput* input)
 {
+	UpdateAutomaticFollowerMon();
+
 	if (IsDexNavHudActive())
 		return FALSE; //Can't force close this
+
+	#ifdef DEBUG_OVERWORLD_MENU
+	if (DebugMenuComboPressed()
+	&& !ScriptContext2_IsEnabled() && !gPaletteFade->active && !InUnionRoom())
+	{
+		DismissMapNamePopup();
+		ScriptContext2_Enable();
+		ScriptContext1_SetupScript(SystemScript_DebugMenu);
+		return TRUE;
+	}
+	#endif
 
 	if (input->pressedSelectButton && UseRegisteredKeyItemOnField())
     {

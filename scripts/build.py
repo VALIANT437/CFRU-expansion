@@ -64,6 +64,8 @@ STRINGS = './strings'
 AUDIO = './audio'
 BUILD = './build'
 IMAGES = './Images'
+FOLLOWER_MON_SPRITES = './follower_mon_sprites'
+MON_OW_OFFSET = 0x900000  # ROM file offset for follower-mon overworld graphics
 ASFLAGS = ['-mthumb', '-I', ASSEMBLY]
 LDFLAGS = ['BPRE.ld', '-T', 'linker.ld']
 CFLAGS = ['-mthumb', '-mno-thumb-interwork', '-mcpu=arm7tdmi', '-mtune=arm7tdmi',
@@ -389,8 +391,19 @@ def ProcessMusic(midiFile: str) -> str:
 
 def LinkObjects(objects: itertools.chain) -> str:
     """Link objects into one binary."""
-    linked = 'build/linked.o'
-    cmd = [LD] + LDFLAGS + ['-o', linked] + list(objects)
+    linked = os.path.join(BUILD, 'linked.o')
+    responseFile = os.path.join(BUILD, 'link_objects.rsp')
+
+    # Passing every object directly on the command line can exceed Windows'
+    # 32K command-line limit when the project contains many image assets.
+    # GNU ld accepts the same arguments from a response file instead.
+    with open(responseFile, 'w', encoding='utf-8', newline='\n') as file:
+        for objectFile in objects:
+            normalizedPath = os.path.normpath(objectFile).replace('\\', '/')
+            escapedPath = normalizedPath.replace('"', '\\"')
+            file.write('"{}"\n'.format(escapedPath))
+
+    cmd = [LD] + LDFLAGS + ['-o', linked, '@' + responseFile]
     RunCommand(cmd)
     return linked
 
@@ -399,6 +412,30 @@ def Objcopy(binary: str):
     """Run the objcopy."""
     cmd = [OBJCOPY, '-O', 'binary', binary, 'build/output.bin']
     RunCommand(cmd)
+
+
+def BuildFollowerMonSprites() -> str:
+    """Pack follower-mon PNGs and provide their fixed-address linker symbols."""
+    binary = os.path.join(BUILD, 'follower_mon_sprites.bin')
+    assembly = os.path.join(BUILD, 'follower_mon_sprites.s')
+    objectFile = os.path.join(BUILD, 'follower_mon_sprites.o')
+    offsetFile = os.path.join(BUILD, 'follower_mon_sprites.offset')
+    helper = os.path.join('scripts', 'follower_mon_sprites.py')
+    manifest = os.path.join(FOLLOWER_MON_SPRITES, 'manifest.txt')
+    images = glob(os.path.join(FOLLOWER_MON_SPRITES, '*.png'))
+    padding = glob(os.path.join(FOLLOWER_MON_SPRITES, '*.padding.bin'))
+    inputs = [__file__, helper, manifest] + images + padding
+
+    rebuild = not os.path.isfile(objectFile) or not os.path.isfile(binary) or any(
+        os.path.getmtime(objectFile) <= os.path.getmtime(path) for path in inputs
+    )
+    if rebuild:
+        print('Compiling follower-mon overworld sprites')
+        RunCommand([sys.executable, helper, 'build', binary, assembly, hex(MON_OW_OFFSET)])
+        RunCommand([AS] + ASFLAGS + ['-c', assembly, '-o', objectFile])
+    with open(offsetFile, 'w') as file:
+        file.write(hex(MON_OW_OFFSET) + '\n')
+    return objectFile
 
 
 def RunGlob(globString: str, fn) -> map:
@@ -430,6 +467,8 @@ def RunGlob(globString: str, fn) -> map:
 def main():
     Master.init()
     startTime = datetime.now()
+    # Convert Showdown-style trainer overrides before compiling C sources.
+    RunCommand([sys.executable, 'scripts/trainer_party.py', 'build'])
     globs = {
             '**/*.s': ProcessAssembly,
             '**/*.c': ProcessC,
@@ -452,7 +491,8 @@ def main():
 
     try:
         # Gather source files and process them
-        objects = itertools.starmap(RunGlob, globs.items())
+        followerMonSprites = BuildFollowerMonSprites()
+        objects = itertools.chain([[followerMonSprites]], itertools.starmap(RunGlob, globs.items()))
 
         # Link and extract raw binary
         linked = LinkObjects(itertools.chain.from_iterable(objects))

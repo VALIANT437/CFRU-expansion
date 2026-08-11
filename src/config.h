@@ -6,6 +6,7 @@
  */
 
 /*===== Debugging Options =====*/
+#define DEBUG_OVERWORLD_MENU //Press R + START in the overworld to open the debug menu
 //#define DEBUG_QUICK_BATTLES //Battles will end after choosing the first attack
 //#define DEBUG_MEGA //Mega Evolution can always be used
 //#define DEBUG_HMS //HMs can always be used from the party screen, Surf, Waterfall, and Rock Climb can always be used
@@ -59,6 +60,7 @@
 #define FLAG_DISABLE_BAG 0x915 //The bag can't be used in-battle if this flag is set
 #define FLAG_MOVE_RELEARNER_IGNORE_LEVEL 0x916 //When set, the move relearner shows all level-up moves up to MAX_LEVEL
 #define FLAG_EGG_MOVE_RELEARNER 0x917 //When set, the move learner loads egg moves instead
+#define FLAG_PARTY_MOVE_RELEARNER 0x92B //When set, adds Move Relearner to the party Pokemon action menu
 #define FLAG_DYNAMAX_BATTLE 0x918 //When set, Pokemon can Dynamax in battle
 #define FLAG_RAID_BATTLE 0x919 //When set, wild Pokemon will appear Dynamaxed and be fought Raid Battle style.
 #define FLAG_RAID_BATTLE_NO_FORCE_END 0x91A //When set, if FLAG_RAID_BATTLE is set, then raid battles won't be force ended.

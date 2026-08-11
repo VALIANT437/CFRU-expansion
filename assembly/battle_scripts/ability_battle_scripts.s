@@ -116,10 +116,14 @@ ability_battle_scripts.s
 .global BattleScript_QuarkDriveActivates2
 .global BattleScript_ProtosynthesisActivates
 .global BattleScript_ProtosynthesisActivates2
+.global BattleScript_BoosterEnergyActivates
 .global BattleScript_SetPuppetConfusion
 .global BattleScript_MoveEffectConfusion
 .global BattleScript_ToxicDebrisActivates
 .global BattleScript_ToxicDebrisFailure
+.global BattleScript_HospitalityActivates
+.global BattleScript_TeraformZeroActivates
+.global BattleScript_WindPowerActivates
 
 @;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
@@ -224,8 +228,8 @@ BattleScript_IntimidateActivatesRet:
 	setbyte TARGET_BANK 0x0
 
 BS_IntimidateActivatesLoop:
-	jumpifspecies BANK_ATTACKER SPECIES_DIPPLIN SSSyrupActivatesLowStats
-	jumpifspecies BANK_ATTACKER SPECIES_HYDRAPPLE SSSyrupActivatesLowStats
+	callasm CheckAttackerSuperSweetSyrup
+	jumpifbyte EQUALS MULTISTRING_CHOOSER 0x1 SSSyrupActivatesLowStats
 	setstatchanger STAT_ATK | DECREASE_1
 	trygetintimidatetarget BattleScript_IntimidateActivatesReturn
 	jumpifbehindsubstitute BANK_TARGET IntimidateActivatesLoopIncrement
@@ -292,7 +296,8 @@ BattleScript_TraceActivates:
 	call BattleScript_AbilityPopUpRevert
 	clearspecialstatusbit BANK_SCRIPTING STATUS3_SWITCH_IN_ABILITY_DONE
 	call BattleScript_AbilityPopUp
-	printstring 0xD0 @;STRINGID_PKMNTRACED
+	setword BATTLE_STRING_LOADER gText_TraceActivate
+	printstring 0x184
 	waitmessage DELAY_1SECOND
 	call BattleScript_AbilityPopUpRevert
 	tryactivateswitchinability BANK_SCRIPTING
@@ -448,6 +453,9 @@ BattleScript_TransformedEnd3:
 BattleScript_AbilityTransformed:
 	call BattleScript_AbilityPopUp
 	playanimation BANK_SCRIPTING ANIM_TRANSFORM 0x0
+	waitstateatk
+	reloadhealthbar BANK_SCRIPTING
+	callasm RefreshFormChangeHealthbox
 	setword BATTLE_STRING_LOADER TransformedString
 	printstring 0x184
 	waitmessage DELAY_1SECOND
@@ -505,6 +513,23 @@ BattleScript_RainDishActivates:
 	waitmessage DELAY_1SECOND
 	call BattleScript_AbilityPopUpRevert
 	end3
+
+BattleScript_HospitalityActivates:
+	call BattleScript_AbilityPopUp
+	playanimation BANK_TARGET ANIM_HEALING_SPARKLES 0x0
+	orword HIT_MARKER HITMARKER_IGNORE_SUBSTITUTE
+	graphicalhpupdate BANK_TARGET
+	datahpupdate BANK_TARGET
+	printstring 0xC5 @STRINGID_PKMNRESTOREDHPUSING
+	waitmessage DELAY_1SECOND
+	call BattleScript_AbilityPopUpRevert
+	end3
+
+BattleScript_TeraformZeroActivates:
+	call BattleScript_AbilityPopUp
+	pause DELAY_HALFSECOND
+	call BattleScript_AbilityPopUpRevert
+	return
 
 @;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
@@ -1446,12 +1471,22 @@ BattleScript_AbilityPopUpRevert:
 
 @;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 BattleScript_AngerShellActivates:
-	jumpifstat BANK_TARGET GREATERTHAN STAT_DEF STAT_MIN AngerShellModDef
-	jumpifstat BANK_TARGET EQUALS STAT_SPD STAT_MAX AngerShellReturn
-
-AngerShellModDef:
 	call BattleScript_AbilityPopUp
 	setbyte STAT_ANIM_PLAYED 0x0
+	jumpifstat BANK_TARGET GREATERTHAN STAT_DEF STAT_MIN AngerShellDefCanFall
+	jumpifstat BANK_TARGET GREATERTHAN STAT_SPDEF STAT_MIN AngerShellAnimateSpDef
+	goto AS_SkipTo
+
+AngerShellDefCanFall:
+	jumpifstat BANK_TARGET GREATERTHAN STAT_SPDEF STAT_MIN AngerShellAnimateBothDefenses
+	playstatchangeanimation BANK_TARGET, STAT_ANIM_DEF, STAT_ANIM_DOWN | STAT_ANIM_IGNORE_ABILITIES
+	goto AS_SkipTo
+
+AngerShellAnimateSpDef:
+	playstatchangeanimation BANK_TARGET, STAT_ANIM_SPDEF, STAT_ANIM_DOWN | STAT_ANIM_IGNORE_ABILITIES
+	goto AS_SkipTo
+
+AngerShellAnimateBothDefenses:
 	playstatchangeanimation BANK_TARGET, STAT_ANIM_DEF | STAT_ANIM_SPDEF, STAT_ANIM_DOWN | STAT_ANIM_IGNORE_ABILITIES
 AS_SkipTo:
 	setstatchanger STAT_DEF | DECREASE_1
@@ -1513,7 +1548,16 @@ BattleScript_ElectromorphosisActivates:
 	playanimation BANK_SCRIPTING ANIM_CHARGE2 0x0
 	waitmessage DELAY_1SECOND
 	call BattleScript_AbilityPopUpRevert
-	seteffectprimary
+	return
+
+BattleScript_WindPowerActivates:
+	call BattleScript_AbilityPopUp
+	setcharge
+	setword BATTLE_STRING_LOADER gText_ElectromorphosisActivates
+	printstring 0x184
+	playanimation BANK_SCRIPTING ANIM_CHARGE2 0x0
+	waitmessage DELAY_1SECOND
+	call BattleScript_AbilityPopUpRevert
 	return
 
 @;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1588,13 +1632,21 @@ BattleScript_ProtosynthesisActivates2:
 	call BattleScript_AbilityPopUpRevert
 	goto BS_MOVE_END
 
+BattleScript_BoosterEnergyActivates:
+	call BattleScript_AbilityPopUp
+	printstring STRINGID_STATWASHEIGHTENED
+	waitmessage DELAY_1SECOND
+	call BattleScript_AbilityPopUpRevert
+	removeitem BANK_SCRIPTING
+	end3
+
 @;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 BattleScript_SetPuppetConfusion:
 	call BattleScript_AbilityPopUp
 	pause 0x10
 	call BattleScript_AbilityPopUpRevert
-	call BattleScript_MoveEffectConfusion
+	goto BattleScript_MoveEffectConfusion
 
 @;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
@@ -1602,7 +1654,7 @@ BattleScript_MoveEffectConfusion:
 	chosenstatus2animation 0x2, STATUS2_CONFUSION
 	printstring 67
 	waitmessage DELAY_1SECOND
-	goto BS_MOVE_END
+	return
 
 @;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 BattleScript_ToxicDebrisActivates:

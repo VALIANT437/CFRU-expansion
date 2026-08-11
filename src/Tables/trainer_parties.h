@@ -10828,4 +10828,7 @@ static const struct TrainerMonNoItemDefaultMoves sParty_TrainerCueBallPaxton[] =
         .species = SPECIES_MUK,
     },
 };
+
+/* Showdown-syntax overrides generated from trainers.party. */
+#include "trainer_showdown_parties.h"
 #endif

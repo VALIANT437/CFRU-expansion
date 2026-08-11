@@ -791,20 +791,28 @@ struct NewBattleStruct
 	u8 LastUsedTypes[MAX_BATTLERS_COUNT];
 	u8 lastTargeted[MAX_BATTLERS_COUNT];
 	u8 usedMoveIndices[MAX_BATTLERS_COUNT];
-	u8 DisabledMoldBreakerAbilities[MAX_BATTLERS_COUNT];
-	u8 SuppressedAbilities[MAX_BATTLERS_COUNT];
-	u8 neutralizingGasBlockedAbilities[MAX_BATTLERS_COUNT];
+	// Canonical ability state.  gBattleMons[].ability remains the vanilla u8
+	// compatibility mirror and must not be used as the authoritative value.
+	ability_t abilities[MAX_BATTLERS_COUNT];
+	ability_t recordedAbilities[MAX_BATTLERS_COUNT];
+	ability_t textAbilities[MAX_BATTLERS_COUNT];
+	ability_t lastUsedAbility;
+	ability_t DisabledMoldBreakerAbilities[MAX_BATTLERS_COUNT];
+	ability_t SuppressedAbilities[MAX_BATTLERS_COUNT];
+	ability_t neutralizingGasBlockedAbilities[MAX_BATTLERS_COUNT];
 	u8 skyDropAttackersTarget[MAX_BATTLERS_COUNT]; //skyDropAttackersTarget[gBankAttacker] = gBankTarget
 	u8 skyDropTargetsAttacker[MAX_BATTLERS_COUNT]; //skyDropTargetsAttacker[gBankTarget] = gBankAttacker
 	u8 pickupStack[MAX_BATTLERS_COUNT];
 	u8 synchronizeTarget[MAX_BATTLERS_COUNT]; //Bank + 1 that statused given bank
 	u8 leftoverHealingDone[MAX_BATTLERS_COUNT]; //Leftovers already restored health this turn or Sticky Barb did damage
 	u8 statRoseThisRound[MAX_BATTLERS_COUNT];
+	u8 mirrorHerbStatBoosts[MAX_BATTLERS_COUNT][BATTLE_STATS_NO - 1];
 	u8 statFellThisTurn[MAX_BATTLERS_COUNT];
 	u8 statFellThisRound[MAX_BATTLERS_COUNT];
 	u8 recalculatedBestDoublesKillingScores[MAX_BATTLERS_COUNT];
 	s8 lastBracketCalc[MAX_BATTLERS_COUNT]; //~0x2017A4C
 	u8 chiStrikeCritBoosts[MAX_BATTLERS_COUNT];
+	u8 dragonCheerCritBoosts[MAX_BATTLERS_COUNT];
 	u8 sandblastCentiferno[MAX_BATTLERS_COUNT]; //Records if any banks are trapped by G-Max Centiferno or G-Max Sandblast
 	u8 disguisedAs[MAX_BATTLERS_COUNT]; //The party index + 1 the mon with Illusion is disguised as
 	u8 quickClawRandomNumber[MAX_BATTLERS_COUNT];
@@ -817,6 +825,10 @@ struct NewBattleStruct
 	u8 ElectroCounter[MAX_BATTLERS_COUNT];
 	u8 quarkDriveActivated[MAX_BATTLERS_COUNT];
 	u8 ProtosynthesisActivated[MAX_BATTLERS_COUNT];
+	u8 boosterEnergyActivated[MAX_BATTLERS_COUNT];
+	u8 paradoxBoostedStat[MAX_BATTLERS_COUNT];
+	u32 statuses4[MAX_BATTLERS_COUNT]; //Volatile Gen 9 effects (currently Salt Cure)
+	u8 superSweetSyrupActivated[NUM_BATTLE_SIDES]; //Party-index bits; activates once per battle
 
 	//Bit Fields for Banks
 	u8 MicleBerryBits;
@@ -869,7 +881,7 @@ struct NewBattleStruct
 	u8 savedObjId;
 	u8 lastFainted;
 	s8 intimidateActive;
-	u8 backupAbility;
+	ability_t backupAbility;
 	u8 switchOutBankLooper;
 	u8 skipBankStatAnim;
 	u8 maxGoldrushUses;
@@ -1056,7 +1068,7 @@ struct NewBattleStruct
 		u8 secondPreviousMonIn[MAX_BATTLERS_COUNT];
 		bool8 suckerPunchOkay[MAX_BATTLERS_COUNT];
 		u8 itemEffects[MAX_BATTLERS_COUNT];
-		u8 backupAbilities[MAX_BATTLERS_COUNT]; //For when Pokemon are temp Mega Evolved
+		ability_t backupAbilities[MAX_BATTLERS_COUNT]; //For when Pokemon are temp Mega Evolved
 		u16 movePredictions[MAX_BATTLERS_COUNT][MAX_BATTLERS_COUNT]; //movePredictions[bankAtk][bankDef]
 		u16 previousMovePredictions[MAX_BATTLERS_COUNT][MAX_BATTLERS_COUNT]; //previousMovePredictions[bankAtk][bankDef]
 		u16 strongestMove[MAX_BATTLERS_COUNT][MAX_BATTLERS_COUNT]; //strongestMove[bankAtk][bankDef]
@@ -1571,7 +1583,7 @@ extern s32 gBattleMoveDamage;
 extern s32 gHpDealt;
 extern s32 gTakenDmg[MAX_BATTLERS_COUNT];
 extern u16 gLastUsedItem;
-extern u8 gLastUsedAbility;
+extern ability_t gLastUsedAbility;
 extern u8 gBankAttacker;
 extern u8 gBankTarget;
 extern u8 gBankFainted;

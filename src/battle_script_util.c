@@ -278,8 +278,8 @@ void MoldBreakerRemoveAbilitiesOnForceSwitchIn(void)
 		if (gSpecialAbilityFlags[ABILITY(gBankSwitching)].gMoldBreakerIgnoredAbilities
 		|| gSpecialAbilityFlags[ABILITY(gBankSwitching)].gMyceliumMighIgnoredAbilities)
 		{
-			gNewBS->DisabledMoldBreakerAbilities[gBankSwitching] = gBattleMons[gBankSwitching].ability;
-			gBattleMons[gBankSwitching].ability = 0;
+			gNewBS->DisabledMoldBreakerAbilities[gBankSwitching] = ABILITY(gBankSwitching);
+			ABILITY(gBankSwitching) = 0;
 		}
 	}
 }
@@ -288,7 +288,7 @@ void MoldBreakerRestoreAbilitiesOnForceSwitchIn(void)
 {
 	if (gNewBS->DisabledMoldBreakerAbilities[gBankSwitching])
 	{
-		gBattleMons[gBankSwitching].ability = gNewBS->DisabledMoldBreakerAbilities[gBankSwitching];
+		ABILITY(gBankSwitching) = gNewBS->DisabledMoldBreakerAbilities[gBankSwitching];
 		gNewBS->DisabledMoldBreakerAbilities[gBankSwitching] = 0;
 	}
 }
@@ -963,7 +963,7 @@ void ChangeTargetTypeFunc(void)
 	switch (gCurrentMove) {
 		case MOVE_SOAK:
 			if (ABILITY(gBankTarget) == ABILITY_MULTITYPE
-			||  ABILITY(gBankTarget) == ABILITY_RKS_SYSTEM
+			||  ABILITY(gBankTarget) == ABILITY_RKSSYSTEM
 			|| (gBattleMons[gBankTarget].type1 == TYPE_WATER &&
 				gBattleMons[gBankTarget].type2 == TYPE_WATER &&
 				gBattleMons[gBankTarget].type3 == TYPE_BLANK))
@@ -986,7 +986,7 @@ void ChangeTargetTypeFunc(void)
 				gBattlescriptCurrInstr = BattleScript_NotAffected - 5;
 			}
 			else if (ABILITY(gBankTarget) == ABILITY_MULTITYPE
-			||  ABILITY(gBankTarget) == ABILITY_RKS_SYSTEM
+			||  ABILITY(gBankTarget) == ABILITY_RKSSYSTEM
 			|| (gBattleMons[gBankTarget].type1 == TYPE_PSYCHIC &&
 				gBattleMons[gBankTarget].type2 == TYPE_PSYCHIC &&
 				gBattleMons[gBankTarget].type3 == TYPE_BLANK))
@@ -1336,6 +1336,57 @@ void TailwindLuckyChantFunc(void)
 	}
 }
 
+void TryActivateWindRiderFromTailwind(void)
+{
+	static u8 bank;
+
+	while (bank < gBattlersCount)
+	{
+		u8 windRiderBank = bank++;
+
+		if (SIDE(windRiderBank) == SIDE(gBankAttacker)
+		&& BATTLER_ALIVE(windRiderBank)
+		&& ABILITY(windRiderBank) == ABILITY_WINDRIDER
+		&& STAT_STAGE(windRiderBank, STAT_ATK) < STAT_STAGE_MAX)
+		{
+			gBankTarget = windRiderBank;
+			gBattleScripting.bank = windRiderBank;
+			gBattleScripting.statChanger = STAT_ATK | INCREASE_1;
+			BattleScriptPush(gBattlescriptCurrInstr);
+			gBattlescriptCurrInstr = BattleScript_TargetAbilityStatRaise - 5;
+			return;
+		}
+
+		if (SIDE(windRiderBank) == SIDE(gBankAttacker)
+		&& BATTLER_ALIVE(windRiderBank)
+		&& ABILITY(windRiderBank) == ABILITY_WINDPOWER
+		&& !(gStatuses3[windRiderBank] & STATUS3_CHARGED_UP))
+		{
+			gBattleScripting.bank = windRiderBank;
+			BattleScriptPush(gBattlescriptCurrInstr);
+			gBattlescriptCurrInstr = BattleScript_WindPowerActivates - 5;
+			return;
+		}
+	}
+
+	bank = 0;
+}
+
+void CheckTargetGuardDog(void)
+{
+	gBattleCommunication[MULTISTRING_CHOOSER] = ABILITY(gBankTarget) == ABILITY_GUARDDOG;
+}
+
+void CheckAttackerGuardDog(void)
+{
+	gBattleCommunication[MULTISTRING_CHOOSER] = ABILITY(gBankAttacker) == ABILITY_GUARDDOG;
+}
+
+void CheckAttackerSuperSweetSyrup(void)
+{
+	gBattleCommunication[MULTISTRING_CHOOSER] = ABILITY(gBankAttacker) == ABILITY_SUPERSWEETSYRUP;
+}
+
 void FlameBurstFunc(void)
 {
 	u8 par = PARTNER(gBankTarget);
@@ -1397,8 +1448,8 @@ void AbilityChangeBSFunc(void)
 		return;
 	}
 
-	u8* atkAbilityLoc, *defAbilityLoc;
-	u8 atkAbility, defAbility;
+	ability_t* atkAbilityLoc, *defAbilityLoc;
+	ability_t atkAbility, defAbility;
 
 	//Get correct location of ability
 	atkAbilityLoc = GetAbilityLocation(gBankAttacker);
@@ -1484,28 +1535,44 @@ void AbilityChangeBSFunc(void)
 			break;
 
 		case MOVE_DOODLE:
+		{
+			u8 partner = PARTNER(gBankAttacker);
+			bool8 hasPartner = IS_DOUBLE_BATTLE && BATTLER_ALIVE(partner);
+			ability_t partnerAbility = hasPartner ? ABILITY(partner) : ABILITY_NONE;
+
 			if (defAbility == ABILITY_NONE
 			||  IsDynamaxed(gBankTarget)
-			||  *defAbilityLoc == *atkAbilityLoc
-			||  gSpecialAbilityFlags[atkAbility].gEntrainmentBannedAbilitiesAttacker
+			||  (defAbility == atkAbility && (!hasPartner || defAbility == partnerAbility))
 			||  gSpecialAbilityFlags[defAbility].gEntrainmentBannedAbilitiesTarget)
 				gBattlescriptCurrInstr = BattleScript_ButItFailed - 5;
 			else
 			{
+				gNewBS->backupAbility = atkAbility;
 				*atkAbilityLoc = defAbility;
-				//SetTookAbilityFrom(gBankTarget, gBankAttacker); //Set after the first Ability pop up
+				SetTookAbilityFrom(gBankAttacker, gBankTarget);
 				gLastUsedAbility = atkAbility; //Original ability
 				ResetVarsForAbilityChange(gBankAttacker);
-				gBattleStringLoader = EntrainmentString;
+
+				if (hasPartner)
+				{
+					*GetAbilityLocation(partner) = defAbility;
+					SetTookAbilityFrom(partner, gBankTarget);
+					ResetVarsForAbilityChange(partner);
+					if (partnerAbility == ABILITY_TRUANT)
+						gDisableStructs[partner].truantCounter = 0;
+				}
+
+				gBattleStringLoader = DoodleString;
 
 				if (gLastUsedAbility == ABILITY_TRUANT)
 					gDisableStructs[gBankAttacker].truantCounter = 0; //Reset counter
 			}
 			break;
+		}
 	}
 
 	if (gBattlescriptCurrInstr != BattleScript_ButItFailed - 5)
-		TransferAbilityPopUp(gBankTarget, gLastUsedAbility);
+		TransferAbilityPopUp(gCurrentMove == MOVE_DOODLE ? gBankAttacker : gBankTarget, gLastUsedAbility);
 }
 
 void EntrainmentSetCorrectTookAbilityFrom(void)
@@ -2200,7 +2267,8 @@ void SetThroatChopTimer(void)
 void GlaiveRushTimer(void)
 {
 	gNewBS->GlaiveRushTimers[gBankAttacker] = 1;
-	gStatuses3[gBankTarget] |= STATUS3_GLAIVERUSH;
+	// The vulnerability belongs to the user, not to the Pokemon it hit.
+	gStatuses3[gBankAttacker] |= STATUS3_GLAIVERUSH;
 }
 
 void SetNoMoreMovingThisTurnSwitchingBank(void)
@@ -2761,8 +2829,7 @@ void TryActivateProtosynthesis(void)
             continue;
 
         u16 ability = ABILITY(bank);
-		u16 species = SPECIES(bank);
-        if (ability == ABILITY_QUARKDRIVE && IsSunWeatherActive(bank) && SpeciesHasProtosynthesis(species))
+        if (ability == ABILITY_PROTOSYNTHESIS && IsSunWeatherActive(bank))
         {
 			gNewBS->ProtosynthesisActivated[bank] = TRUE;
 			gBankAttacker = bank;
@@ -2773,21 +2840,48 @@ void TryActivateProtosynthesis(void)
     }
 }
 
-void TrySetPoisonPuppeterEffect(void)
-{
-	u32 status = gBattleMons[gBankTarget].status1;
-	
-	if (SpeciesHasPoisonPuppeteer(SPECIES(gBankAttacker)) && (status & STATUS_POISON) && !(gBattleMons[gBankTarget].status2 & STATUS2_CONFUSION))
-	{
-		gBattleMons[gBankTarget].status2 |= STATUS2_CONFUSION;
-		gBattlescriptCurrInstr = BattleScript_SetPuppetConfusion - 5;
-	}
-}
-
 void TryUpperHand(void)
 {
 	if (PRIORITY(gChosenMovesByBanks[gBankTarget]) >= 1 && PRIORITY(gChosenMovesByBanks[gBankTarget]) <= 3)
 		return;
 
 	gBattlescriptCurrInstr = BattleScript_ButItFailed - 5 - 2;
+}
+
+void TrySetDragonCheer(void)
+{
+	if (!BATTLER_ALIVE(gBankTarget) || gNewBS->dragonCheerCritBoosts[gBankTarget])
+	{
+		gBattlescriptCurrInstr = BattleScript_ButItFailed - 5;
+		return;
+	}
+
+	gNewBS->dragonCheerCritBoosts[gBankTarget] = IsOfType(gBankTarget, TYPE_DRAGON) ? 2 : 1;
+}
+
+void TryRevivalBlessing(void)
+{
+	struct Pokemon *party = SIDE(gBankAttacker) == B_SIDE_PLAYER ? gPlayerParty : gEnemyParty;
+	u8 chosen = PARTY_SIZE;
+
+	for (u8 i = 0; i < PARTY_SIZE; ++i)
+	{
+		u16 species = GetMonData(&party[i], MON_DATA_SPECIES, NULL);
+		if (species != SPECIES_NONE && species != SPECIES_EGG
+		&& GetMonData(&party[i], MON_DATA_HP, NULL) == 0)
+		{
+			chosen = i;
+			break;
+		}
+	}
+
+	if (chosen == PARTY_SIZE)
+	{
+		gBattlescriptCurrInstr = BattleScript_ButItFailed - 5;
+		return;
+	}
+
+	u16 hp = MathMax(1, GetMonData(&party[chosen], MON_DATA_MAX_HP, NULL) / 2);
+	SetMonData(&party[chosen], MON_DATA_HP, &hp);
+	PREPARE_MON_NICK_BUFFER(gBattleTextBuff1, gBankAttacker, chosen);
 }
